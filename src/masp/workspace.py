@@ -13,15 +13,45 @@ class GitError(RuntimeError):
 
 
 def git(root: Path, *args: str) -> str:
-    env = {k: v for k, v in os.environ.items() if k.upper() in {
-        "PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "LANG",
-    }}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k.upper()
+        in {
+            "PATH",
+            "SYSTEMROOT",
+            "WINDIR",
+            "TEMP",
+            "TMP",
+            "HOME",
+            "USERPROFILE",
+            "LANG",
+        }
+    }
     env.update(GIT_TERMINAL_PROMPT="0", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
     result = subprocess.run(
-        ["git", "-c", f"core.hooksPath={os.devnull}", "-c", "commit.gpgsign=false",
-         "-c", "core.autocrlf=false", "-c", "user.name=MASP Agent",
-         "-c", "user.email=agent@masp.local", "-C", str(root), *args],
-        capture_output=True, encoding="utf-8", errors="replace", env=env, timeout=45, check=False,
+        [
+            "git",
+            "-c",
+            f"core.hooksPath={os.devnull}",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "core.autocrlf=false",
+            "-c",
+            "user.name=MASP Agent",
+            "-c",
+            "user.email=agent@masp.local",
+            "-C",
+            str(root),
+            *args,
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=45,
+        check=False,
     )
     if result.returncode:
         raise GitError(f"git {args[0]} exited {result.returncode}: {result.stderr[:2000]}")
@@ -73,16 +103,28 @@ def import_repo(source: Path, destination: Path) -> None:
     git(source, "clone", "--no-hardlinks", "--", str(source.resolve()), str(destination))
 
 
-def repository_context(root: Path) -> dict[str, Any]:
+def repository_context(root: Path, scopes: list[str] | None = None) -> dict[str, Any]:
     names = git(root, "ls-files", "-z").split("\0")
     # Only an explicit small documentation allowlist reaches a model by default.
-    files = {}
+    files: dict[str, str] = {}
     for name in ("README.md", "pyproject.toml"):
         if name in names:
             path = target(root, name)
             files[name] = path.read_text("utf-8", errors="replace")[:12000]
-    return {"revision": git(root, "rev-parse", "HEAD"), "files": files,
-            "paths": [name for name in names if name][:300]}
+    if scopes:
+        candidates = git(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+        remaining = 40000
+        for name in sorted(set(candidates.split("\0")) - {""}):
+            if allowed(name, scopes) and remaining > 0:
+                path = target(root, name)
+                if path.is_file():
+                    files[name] = path.read_text("utf-8", errors="replace")[:remaining]
+                    remaining -= len(files[name])
+    return {
+        "revision": git(root, "rev-parse", "HEAD"),
+        "files": files,
+        "paths": [name for name in names if name][:300],
+    }
 
 
 class Workspace:
@@ -96,18 +138,34 @@ class Workspace:
 
     def create(self) -> None:
         self.root.mkdir(parents=True, exist_ok=False)
-        git(self.repository, "worktree", "add", "-b", self.branch,
-            str(self.integration), self.revision)
+        git(
+            self.repository,
+            "worktree",
+            "add",
+            "-b",
+            self.branch,
+            str(self.integration),
+            self.revision,
+        )
 
     def task(self, task_id: str) -> Path:
         path = self.root / task_id
-        git(self.repository, "worktree", "add", "-b", f"masp/{self.run_id}/{task_id}",
-            str(path), git(self.integration, "rev-parse", "HEAD"))
+        git(
+            self.repository,
+            "worktree",
+            "add",
+            "-b",
+            f"masp/{self.run_id}/{task_id}",
+            str(path),
+            git(self.integration, "rev-parse", "HEAD"),
+        )
         return path
 
     def commit(self, path: Path, task_id: str) -> str:
         git(path, "add", "--all")
-        git(path, "commit", "--allow-empty", "-m", f"feat({task_id}): verified agent implementation")
+        git(
+            path, "commit", "--allow-empty", "-m", f"feat({task_id}): verified agent implementation"
+        )
         return git(path, "rev-parse", "HEAD")
 
     def merge(self, commit: str) -> str:
