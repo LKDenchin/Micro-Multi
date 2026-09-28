@@ -12,17 +12,32 @@ def register(store: Store, project_id: str, run_id: str, plan: Plan) -> dict[str
     prior = store.list("contract", project_id)
     document = plan.model_dump()
     digest = hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
-    previous = prior[0]["plan"] if prior else None
+    accepted = [
+        item for item in prior if store.get("run", item["run_id"])["state"] == State.SUCCEEDED
+    ]
+    previous = accepted[0]["plan"] if accepted else None
     diff = {"before": previous["contracts"] if previous else [], "after": document["contracts"]}
     # Conservative compatibility policy: any shared-interface change needs review.
     breaking = previous is not None and diff["before"] != diff["after"]
-    record = {"id": identifier("contract"), "project_id": project_id, "run_id": run_id,
-              "version": len(prior) + 1, "schema_version": "1.0", "digest": digest,
-              "created_at": now(), "plan": document, "diff": diff,
-              "potentially_breaking": breaking, "validation": "passed"}
+    record = {
+        "id": identifier("contract"),
+        "project_id": project_id,
+        "run_id": run_id,
+        "version": len(prior) + 1,
+        "schema_version": "1.0",
+        "digest": digest,
+        "created_at": now(),
+        "plan": document,
+        "diff": diff,
+        "potentially_breaking": breaking,
+        "validation": "passed",
+    }
     store.put("contract", record, project_id)
-    store.event(run_id, "contract.created", {"id": record["id"], "digest": digest,
-                                            "version": record["version"]})
+    store.event(
+        run_id,
+        "contract.created",
+        {"id": record["id"], "digest": digest, "version": record["version"]},
+    )
     return record
 
 
@@ -37,8 +52,9 @@ def conflicts(left: TaskSpec, right: TaskSpec) -> bool:
     return False
 
 
-def ready(tasks: list[TaskSpec], states: dict[str, str], running: list[TaskSpec],
-          slots: int) -> list[TaskSpec]:
+def ready(
+    tasks: list[TaskSpec], states: dict[str, str], running: list[TaskSpec], slots: int
+) -> list[TaskSpec]:
     chosen: list[TaskSpec] = []
     for task in sorted(tasks, key=lambda item: (-item.priority, item.id)):
         if len(chosen) >= slots:

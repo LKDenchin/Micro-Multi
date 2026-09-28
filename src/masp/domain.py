@@ -31,15 +31,20 @@ class State(StrEnum):
     HUMAN_REVIEW_REQUIRED = "HUMAN_REVIEW_REQUIRED"
 
 
-TERMINAL = {State.SUCCEEDED, State.FAILED, State.BLOCKED, State.CANCELLED,
-            State.HUMAN_REVIEW_REQUIRED}
+TERMINAL = {
+    State.SUCCEEDED,
+    State.FAILED,
+    State.BLOCKED,
+    State.CANCELLED,
+    State.HUMAN_REVIEW_REQUIRED,
+}
 EDGES: dict[State, set[State]] = {
     State.CREATED: {State.PLANNING, State.QUEUED},
     State.PLANNING: {State.CONTRACTING},
     State.CONTRACTING: {State.SCHEDULING},
     State.SCHEDULING: {State.RUNNING},
     State.QUEUED: {State.RUNNING, State.BLOCKED},
-    State.RUNNING: {State.REVIEWING, State.INTEGRATING},
+    State.RUNNING: {State.REVIEWING, State.INTEGRATING, State.REPAIRING},
     State.REVIEWING: {State.VERIFYING, State.REPAIRING},
     State.VERIFYING: {State.REPAIRING, State.INTEGRATING},
     State.REPAIRING: {State.RUNNING},
@@ -50,20 +55,39 @@ EDGES: dict[State, set[State]] = {
 
 def check_transition(before: str, after: State) -> None:
     old = State(before)
-    if old in TERMINAL or (after not in EDGES.get(old, set()) and after not in {
-        State.FAILED, State.CANCELLED, State.HUMAN_REVIEW_REQUIRED,
-    }):
+    if old in TERMINAL or (
+        after not in EDGES.get(old, set())
+        and after
+        not in {
+            State.FAILED,
+            State.CANCELLED,
+            State.HUMAN_REVIEW_REQUIRED,
+        }
+    ):
         raise ValueError(f"Invalid transition: {old} -> {after}")
 
 
 def safe_path(value: str) -> str:
     parts = value.split("/")
-    reserved = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
-                *(f"lpt{i}" for i in range(1, 10))}
-    if not value or len(value) > 200 or any(
-        part in {"", ".", ".."} or part.lower() in {".git", ".masp"}
-        or part.endswith((".", " ")) or part.split(".")[0].lower() in reserved
-        or re.search(r'[<>:"\\|?*\x00-\x1f]', part) for part in parts
+    reserved = {
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        *(f"com{i}" for i in range(1, 10)),
+        *(f"lpt{i}" for i in range(1, 10)),
+    }
+    if (
+        not value
+        or len(value) > 200
+        or any(
+            part in {"", ".", ".."}
+            or part.lower() in {".git", ".masp"}
+            or part.endswith((".", " "))
+            or part.split(".")[0].lower() in reserved
+            or re.search(r'[<>:"\\|?*\x00-\x1f]', part)
+            for part in parts
+        )
     ):
         raise ValueError(f"Unsafe relative path: {value!r}")
     return value
@@ -82,8 +106,9 @@ class RunCreate(StrictModel):
     max_agents: int = Field(default=2, ge=1, le=4)
     max_retries: int = Field(default=3, ge=0, le=5)
     max_runtime: int = Field(default=600, ge=1, le=3600)
-    max_tokens: int = Field(default=32000, ge=1000, le=1000000)
+    max_tokens: int = Field(default=200000, ge=1000, le=1000000)
     inject_failure: bool = False
+    approve_contract_change: bool = False
 
 
 class Check(StrictModel):
@@ -91,6 +116,13 @@ class Check(StrictModel):
     layer: Literal["contract", "build", "lint", "type", "unit", "integration", "security"]
     command: list[str] = Field(min_length=1, max_length=30)
     timeout: int = Field(default=60, ge=1, le=120)
+
+    @field_validator("command")
+    @classmethod
+    def arguments(cls, values: list[str]) -> list[str]:
+        if any(not value or "\x00" in value or len(value) > 16000 for value in values):
+            raise ValueError("Invalid command argument")
+        return values
 
 
 class TaskSpec(StrictModel):
@@ -110,6 +142,18 @@ class TaskSpec(StrictModel):
     def paths(cls, values: list[str]) -> list[str]:
         return [safe_path(value) for value in values]
 
+    @field_validator("module")
+    @classmethod
+    def module_path(cls, value: str) -> str:
+        return safe_path(value)
+
+    @field_validator("dependencies", "resources")
+    @classmethod
+    def unique_labels(cls, values: list[str]) -> list[str]:
+        if len(set(values)) != len(values):
+            raise ValueError("Values must be unique")
+        return values
+
 
 class Plan(StrictModel):
     version: Literal["1.0"] = "1.0"
@@ -128,9 +172,16 @@ class Plan(StrictModel):
         for task in self.tasks:
             if task.id in task.dependencies or set(task.dependencies) - ids:
                 raise ValueError(f"Invalid dependencies: {task.id}")
+            if not {"build", "unit"}.issubset({check.layer for check in task.checks}):
+                raise ValueError(f"Task {task.id} requires build and unit verification")
+        if not any(check.layer == "integration" for check in self.final_checks):
+            raise ValueError("Final integration verification is mandatory")
         while remaining:
-            ready = {task.id for task in self.tasks if task.id in remaining
-                     and not set(task.dependencies) & remaining}
+            ready = {
+                task.id
+                for task in self.tasks
+                if task.id in remaining and not set(task.dependencies) & remaining
+            }
             if not ready:
                 raise ValueError("Dependency cycle")
             remaining -= ready
