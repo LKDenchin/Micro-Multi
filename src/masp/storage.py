@@ -1,0 +1,99 @@
+"""SQLite records and ordered events. Agents never receive database access."""
+
+import json
+import sqlite3
+import threading
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from masp.domain import State, check_transition
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def identifier(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+class Store:
+    def __init__(self, path: Path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
+        self.lock = threading.RLock()
+        with self.connect() as db:
+            db.executescript("""
+                PRAGMA journal_mode=WAL;
+                CREATE TABLE IF NOT EXISTS records (
+                    kind TEXT NOT NULL, id TEXT NOT NULL, parent TEXT NOT NULL,
+                    data TEXT NOT NULL, PRIMARY KEY (kind,id));
+                CREATE INDEX IF NOT EXISTS records_parent ON records(kind,parent);
+                CREATE TABLE IF NOT EXISTS events (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+                    data TEXT NOT NULL);
+                CREATE INDEX IF NOT EXISTS events_run ON events(run_id,sequence);
+            """)
+
+    def connect(self) -> sqlite3.Connection:
+        return sqlite3.connect(self.path, timeout=30)
+
+    def put(self, kind: str, data: dict[str, Any], parent: str = "") -> dict[str, Any]:
+        with self.lock, self.connect() as db:
+            db.execute("INSERT INTO records VALUES (?,?,?,?) ON CONFLICT(kind,id) "
+                       "DO UPDATE SET data=excluded.data,parent=excluded.parent",
+                       (kind, data["id"], parent, json.dumps(data, ensure_ascii=False)))
+        return data
+
+    def get(self, kind: str, key: str) -> dict[str, Any]:
+        with self.connect() as db:
+            row = db.execute("SELECT data FROM records WHERE kind=? AND id=?", (kind, key)).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown {kind}: {key}")
+        return dict(json.loads(row[0]))
+
+    def list(self, kind: str, parent: str | None = None) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute("SELECT data FROM records WHERE kind=? "
+                              "AND (? IS NULL OR parent=?) ORDER BY rowid DESC",
+                              (kind, parent, parent)).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    def update(self, kind: str, key: str, **changes: Any) -> dict[str, Any]:
+        with self.lock, self.connect() as db:
+            row = db.execute("SELECT data FROM records WHERE kind=? AND id=?", (kind, key)).fetchone()
+            if row is None:
+                raise KeyError(key)
+            data = json.loads(row[0])
+            data.update(changes)
+            db.execute("UPDATE records SET data=? WHERE kind=? AND id=?",
+                       (json.dumps(data, ensure_ascii=False), kind, key))
+            return dict(data)
+
+    def transition(self, kind: str, key: str, state: State) -> dict[str, Any]:
+        with self.lock:
+            record = self.get(kind, key)
+            check_transition(record["state"], state)
+            record = self.update(kind, key, state=state.value, updated_at=now())
+            run_id = key if kind == "run" else record["run_id"]
+            self.event(run_id, f"{kind}.state", {"state": state.value},
+                       key if kind == "task" else None)
+            return record
+
+    def event(self, run_id: str, event_type: str, payload: dict[str, Any],
+              task_id: str | None = None, agent_id: str | None = None) -> dict[str, Any]:
+        event = {"event_id": identifier("evt"), "timestamp": now(), "run_id": run_id,
+                 "task_id": task_id, "agent_id": agent_id, "type": event_type, "payload": payload}
+        with self.lock, self.connect() as db:
+            cursor = db.execute("INSERT INTO events(run_id,data) VALUES (?,?)",
+                                (run_id, json.dumps(event, ensure_ascii=False)))
+            event["sequence"] = cursor.lastrowid
+        return event
+
+    def events(self, run_id: str, after: int = 0) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute("SELECT sequence,data FROM events WHERE run_id=? AND sequence>? "
+                              "ORDER BY sequence LIMIT 500", (run_id, after)).fetchall()
+        return [dict(json.loads(data), sequence=sequence) for sequence, data in rows]
