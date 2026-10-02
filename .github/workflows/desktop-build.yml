@@ -1,6 +1,11 @@
 name: Desktop package build
 on:
   workflow_dispatch:
+    inputs:
+      upload_draft:
+        description: Upload verified Linux installers to the existing v0.1.0 draft
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -27,6 +32,8 @@ jobs:
             dist/desktop/SHA256SUMS.txt
           if-no-files-found: error
   linux:
+    permissions:
+      contents: write
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -65,3 +72,9 @@ jobs:
             dist/desktop/Micro-Multi-*.AppImage
             dist/desktop/SHA256SUMS.txt
           if-no-files-found: error
+      - name: Upload verified Linux release assets
+        if: inputs.upload_draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/upload_linux_release.py
