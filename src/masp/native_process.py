@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 import ctypes
-import os
+import subprocess
+import sys
 from typing import Any
+
+
+def native_creation_flags(*, new_process_group: bool = False) -> int:
+    if sys.platform == "win32":
+        return (
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            if new_process_group
+            else subprocess.CREATE_NO_WINDOW
+        )
+    return 0
 
 
 class ProcessJob:
     def __init__(self, process_handle: int, memory_bytes: int | None = 512 * 1024 * 1024):
         self.handle: Any = None
         self.kernel: Any = None
-        if os.name != "nt":
+        if sys.platform != "win32":
             return
         from ctypes import wintypes
 

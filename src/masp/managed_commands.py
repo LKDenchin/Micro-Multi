@@ -5,12 +5,13 @@ import inspect
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 from typing import Any
 
-from masp.native_process import ProcessJob
+from masp.native_process import ProcessJob, native_creation_flags
 
 
 def command_run(
@@ -23,7 +24,7 @@ def command_run(
         try:
             return value.decode("utf-8")
         except UnicodeDecodeError:
-            return value.decode("gb18030" if os.name == "nt" else "utf-8", errors="replace")
+            return value.decode("gb18030" if sys.platform == "win32" else "utf-8", errors="replace")
 
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(
@@ -33,8 +34,8 @@ def command_run(
             shell=kwargs.get("shell", False),
             stdout=stdout,
             stderr=stderr,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            start_new_session=os.name != "nt",
+            creationflags=native_creation_flags(),
+            start_new_session=sys.platform != "win32",
         )
         job = None
         try:
@@ -56,10 +57,10 @@ def command_run(
             if job:
                 job.close()
             if process.poll() is None:
-                if os.name == "nt":
+                if sys.platform == "win32":
                     process.kill()
                 else:
-                    os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
+                    os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=5)
 
 

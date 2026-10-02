@@ -5,13 +5,14 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
 from typing import Any
 
 from masp.extension_sources import discard_source, package_manager
-from masp.native_process import ProcessJob
+from masp.native_process import ProcessJob, native_creation_flags
 from masp.storage import Store, identifier, now
 
 _guard = threading.Lock()
@@ -27,8 +28,8 @@ def run_build(command: dict[str, Any]) -> tuple[int, str]:
         text=True,
         encoding="utf-8",
         errors="replace",
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        start_new_session=os.name != "nt",
+        creationflags=native_creation_flags(),
+        start_new_session=sys.platform != "win32",
     )
     job = None
     try:
@@ -42,8 +43,8 @@ def run_build(command: dict[str, Any]) -> tuple[int, str]:
         if job:
             job.close()
         if process.poll() is None:
-            if os.name != "nt":
-                os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
+            if sys.platform != "win32":
+                os.killpg(process.pid, signal.SIGKILL)
             else:
                 process.kill()
             process.wait()

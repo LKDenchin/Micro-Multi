@@ -1,13 +1,15 @@
 """Acquire npm/git bundles into app-owned sources; registration remains transactional."""
 
 import json
-import os
 import re
 import shutil
 import subprocess
+import sys
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
+
+from masp.native_process import native_creation_flags
 
 
 def remote_source(source: str) -> bool:
@@ -20,7 +22,7 @@ def package_manager(root: Path) -> tuple[str, str]:
     package = json.loads((root / "package.json").read_text("utf-8"))
     declared = str(package.get("packageManager", ""))
     name = "pnpm" if declared.startswith("pnpm@") or (root / "pnpm-lock.yaml").is_file() else "npm"
-    executable = shutil.which(name + ".cmd" if os.name == "nt" else name)
+    executable = shutil.which(name + ".cmd" if sys.platform == "win32" else name)
     if not executable:
         raise ValueError(f"{name} is required by this bundle; dependency scripts were not executed")
     return name, executable
@@ -41,7 +43,7 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
             encoding="utf-8",
             errors="replace",
             timeout=240,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            creationflags=native_creation_flags(),
         )
         if result.returncode:
             raise ValueError(
@@ -56,7 +58,7 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
             )
             if not match:
                 raise ValueError("Use npm:package@version or npm:@scope/package@version")
-            npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+            npm = shutil.which("npm.cmd" if sys.platform == "win32" else "npm")
             if not npm:
                 raise ValueError("npm is required to acquire this bundle")
             (stage / "package.json").write_text('{"private":true}', encoding="utf-8")

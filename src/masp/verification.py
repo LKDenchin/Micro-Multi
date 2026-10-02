@@ -4,6 +4,7 @@ import ast
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from masp.domain import Check, CheckResult, Finding, Proposal, TaskSpec
+from masp.native_process import native_creation_flags
 from masp.workspace import allowed, git, target
 
 
@@ -130,7 +132,7 @@ class LocalTool:
         head = Path(cmd[0]).name.lower()
         if head in {"python", "python3", "python.exe", "python3.exe"}:
             return [sys.executable, "-X", "utf8", *cmd[1:]]
-        if os.name == "nt":
+        if sys.platform == "win32":
             if head == "test" and len(cmd) >= 3 and cmd[1] in {"-f", "-e", "-s", "-d", "-r"}:
                 flag = cmd[1]
                 target_file = cmd[2]
@@ -213,8 +215,8 @@ class LocalTool:
                     env=environment,
                     stdout=stdout,
                     stderr=stderr,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
-                    start_new_session=os.name != "nt",
+                    creationflags=native_creation_flags(new_process_group=True),
+                    start_new_session=sys.platform != "win32",
                 )
             except (OSError, ValueError) as error:
                 return CheckResult(
@@ -238,7 +240,7 @@ class LocalTool:
                     error_type = (
                         "CANCELLED" if stop() else "RESOURCE_ERROR" if oversized else "TIMEOUT"
                     )
-                    if os.name == "nt":
+                    if sys.platform == "win32":
                         subprocess.run(
                             ["taskkill", "/F", "/T", "/PID", str(process.pid)],
                             capture_output=True,
@@ -248,7 +250,7 @@ class LocalTool:
                     else:
                         import signal
 
-                        os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
+                        os.killpg(process.pid, signal.SIGKILL)
                     if process.poll() is None:
                         process.kill()
                     break

@@ -7,7 +7,9 @@ Validated locally on Windows 10 x64 with Python 3.14.7 and Ubuntu 24.04.5 x64 in
 | `python -m pytest -q` | 252 passed, 1 skipped; repeated after formatting/lint changes (261.20 s) |
 | `python -m ruff check src tests scripts` | Passed |
 | `python -m ruff format --check src tests scripts` | Passed, 100 files |
-| `python -m mypy src/masp` | Passed, 45 source files |
+| `python -m mypy src/masp --platform linux` | Passed, 45 source files |
+| `python -m mypy src/masp --platform win32` | Passed, 45 source files |
+| Native process / extension regression checks | 34 passed after platform guard corrections |
 | `python -m build` | Wheel and source archive built successfully |
 | Windows NSIS build | Installer generated successfully |
 | Linux AppImage build | Single-file x86_64 package generated successfully |

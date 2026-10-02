@@ -11,13 +11,14 @@ import queue
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
 from masp.native_approval import NativeApprovalBridge, native_approval
-from masp.native_process import ProcessJob
+from masp.native_process import ProcessJob, native_creation_flags
 from masp.storage import Store
 
 HOST = Path(__file__).parent / "native" / "cordis_host.mjs"
@@ -166,8 +167,8 @@ class CordisWorker:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            start_new_session=os.name != "nt",
+            creationflags=native_creation_flags(),
+            start_new_session=sys.platform != "win32",
         )
         try:
             self.job = ProcessJob(int(getattr(self.process, "_handle", 0)))
@@ -351,17 +352,17 @@ class CordisWorker:
                     ):
                         pass
                 if self.process.poll() is None:
-                    if os.name == "nt" and self.job.handle:
+                    if sys.platform == "win32" and self.job.handle:
                         self.job.close()
-                    elif os.name == "nt":
+                    elif sys.platform == "win32":
                         subprocess.run(
                             ["taskkill", "/F", "/T", "/PID", str(self.process.pid)],
                             capture_output=True,
                             timeout=5,
-                            creationflags=subprocess.CREATE_NO_WINDOW,
+                            creationflags=native_creation_flags(),
                         )
                     else:
-                        os.killpg(self.process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
+                        os.killpg(self.process.pid, signal.SIGKILL)
                     self.process.wait(timeout=5)
             self.job.close()
             for reader in self.readers:
