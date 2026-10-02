@@ -29,7 +29,7 @@ Micro-Multi 将对话、代码、工具和 Agent 团队放进同一个桌面工�
 
 ## 快速安装
 
-在**[Releases 页面](https://github.com/LKDenchin/Micro-Multi/releases/latest)**下载对应系统的软件包。自行构建请参考[桌面构建指南](docs/DESKTOP_RELEASE.md)。
+在 [Releases 页面](https://github.com/LKDenchin/Micro-Multi/releases/latest) 下载对应系统的软件包。自行构建请参考[桌面构建指南](docs/DESKTOP_RELEASE.md)。
 
 | 平台 | 下载 |
 | --- | --- |
