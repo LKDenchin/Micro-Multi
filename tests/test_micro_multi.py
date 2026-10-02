@@ -460,7 +460,8 @@ def test_lead_time_limit_preserves_partial_output(tmp_path, monkeypatch):
         def __init__(self, seconds):
             assert seconds == 28800
 
-        remaining = 0.15
+        # Leave room for client setup on hosted runners before the first token.
+        remaining = 2.0
         exhausted = False
 
     class Slow(Response):
@@ -468,7 +469,7 @@ def test_lead_time_limit_preserves_partial_output(tmp_path, monkeypatch):
             yield "data: " + json.dumps(
                 {"choices": [{"delta": {"content": "saved partial reply"}}]}
             )
-            await asyncio.sleep(2)
+            await asyncio.sleep(10)
 
     monkeypatch.setattr("masp.api.WorkBudget", TinyBudget)
     monkeypatch.setattr("httpx.AsyncClient.stream", lambda *a, **kw: Slow())
