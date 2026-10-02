@@ -63,7 +63,7 @@ def test_cli_is_http_client(monkeypatch, capsys):
 def test_one_scheduler_per_data_directory(tmp_path):
     first = InstanceLock(tmp_path / "lock")
     try:
-        with pytest.raises(ValueError, match="Another MASP"):
+        with pytest.raises(ValueError, match="Another Micro-Multi"):
             InstanceLock(tmp_path / "lock")
     finally:
         first.close()

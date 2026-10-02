@@ -1,0 +1,71 @@
+appId: io.micro-multi.desktop
+productName: Micro-Multi
+asar: false
+npmRebuild: false
+directories:
+  output: dist/desktop
+files:
+  - desktop/**/*.cjs
+  - src/masp/**/*
+  - '!src/**/__pycache__/**'
+  - '!src/**/*.pyc'
+  - package.json
+  - LICENSE
+  - NOTICE
+  - docs/licenses/**/*
+extraResources:
+  - from: build/desktop/python
+    to: python
+  - from: build/desktop/runtime-manifest.json
+    to: runtime-manifest.json
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: src/masp/web/micro-multi.ico
+  artifactName: '${productName}-Setup-${version}-${arch}.${ext}'
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  runAfterFinish: false
+  installerLanguages: [en_US, zh_CN]
+publish: null
+linux:
+  target:
+    - target: deb
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
+  executableName: micro-multi
+  icon: src/masp/web/micro-multi.png
+  category: Development
+  synopsis: Local multi-agent development workspace
+  artifactName: 'Micro-Multi-${version}-${arch}.${ext}'
+  desktop:
+    entry:
+      Name: Micro-Multi
+      StartupWMClass: Micro-Multi
+      Keywords: AI;Development;Agents;
+deb:
+  compression: gz
+  fpm: ['--deb-compression-level', '1']
+  maintainer: Micro-Multi contributors
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libdrm2
+    - libgbm1
+    - libasound2
+    - libsecret-1-0
+    - gnome-keyring
+appImage:
+  executableArgs: []

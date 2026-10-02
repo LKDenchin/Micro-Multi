@@ -60,6 +60,24 @@ class Store:
             )
         return data
 
+    def apply_batch(
+        self,
+        records: list[tuple[str, dict[str, Any], str]],
+        deletes: list[tuple[str, str]] | None = None,
+    ) -> None:
+        """Publish an extension and its components as one inventory transaction."""
+        values = [
+            (kind, data["id"], parent, json.dumps(data, ensure_ascii=False))
+            for kind, data, parent in records
+        ]
+        with self.lock, self.connect() as db:
+            db.executemany(
+                "INSERT INTO records VALUES (?,?,?,?) ON CONFLICT(kind,id) "
+                "DO UPDATE SET data=excluded.data,parent=excluded.parent",
+                values,
+            )
+            db.executemany("DELETE FROM records WHERE kind=? AND id=?", deletes or [])
+
     def get(self, kind: str, key: str) -> dict[str, Any]:
         with self.connect() as db:
             row = db.execute(
@@ -68,6 +86,12 @@ class Store:
         if row is None:
             raise KeyError(f"Unknown {kind}: {key}")
         return dict(json.loads(row[0]))
+
+    def delete(self, kind: str, key: str) -> None:
+        with self.lock, self.connect() as db:
+            cursor = db.execute("DELETE FROM records WHERE kind=? AND id=?", (kind, key))
+            if cursor.rowcount == 0:
+                raise KeyError(f"Unknown {kind}: {key}")
 
     def list(self, kind: str, parent: str | None = None) -> list[dict[str, Any]]:
         with self.connect() as db:

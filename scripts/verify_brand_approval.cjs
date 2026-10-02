@@ -1,0 +1,18 @@
+const {app,BrowserWindow}=require('electron');const fs=require('node:fs');const path=require('node:path');
+app.disableHardwareAcceleration();app.whenReady().then(async()=>{
+ const win=new BrowserWindow({show:false,width:1100,height:800,webPreferences:{sandbox:true,backgroundThrottling:false}});
+ win.webContents.on('console-message', e=>{if(e.level==='error')console.error(e.message)});
+ const probe=path.resolve('src/masp/web/brand_probe.js');fs.writeFileSync(probe,fs.readFileSync('src/masp/web/chat.js','utf8')+'\nwindow.openApproval=openToolApprovalDialog;window.setTheme=applyThemeAndDensity;');
+ win.webContents.session.webRequest.onBeforeRequest({urls:['http://127.0.0.1:8769/static/chat.js*']},(_d,cb)=>cb({redirectURL:'http://127.0.0.1:8769/static/brand_probe.js'}));
+ try{await win.loadURL('http://127.0.0.1:8769/');await new Promise(r=>setTimeout(r,500));
+ const checks=await win.webContents.executeJavaScript(`(()=>{const c=[];const assert=(v,s)=>{if(!v)throw Error(s);c.push(s)};
+ assert(!document.querySelector('#settings-view').textContent.includes('内置工作区 MCP 服务与全套开发工具已启用'),'obsolete setting removed');
+ assert(document.querySelector('link[rel=icon]').href.endsWith('micro-multi.svg'),'favicon updated');assert(document.querySelector('#brand-home img').src.endsWith('micro-multi.svg'),'sidebar logo updated');assert(document.querySelector('.welcome .logo img').src.endsWith('micro-multi.svg'),'welcome logo updated');
+ openApproval({approval_id:'example',conversation_id:'c',tool:'run_command',arguments:'{"command":"mkdir test1"}',required_mode:'commands',reason:'需要用户确认本次操作；不会提升默认权限'});
+ const dialog=document.querySelector('#tool-approval-dialog'),card=dialog.querySelector('.tool-approval-card');assert(getComputedStyle(dialog).borderRadius==='18px','rounded rectangle');assert(getComputedStyle(card).padding==='24px','consistent inner spacing');assert(getComputedStyle(dialog.querySelector('h2')).fontSize==='17px','title scale');assert(dialog.querySelector('#tool-approval-allow-files').hidden,'only relevant approval action');assert(dialog.querySelector('#tool-approval-detail').textContent.includes(String.fromCharCode(10)+'  "command"'),'readable command arguments');assert(dialog.getAttribute('aria-labelledby')==='tool-approval-title','accessible dialog title');
+ return c;})()`);
+ await new Promise(r=>setTimeout(r,250));const dir=path.resolve('evidence/ui-regression');fs.mkdirSync(dir,{recursive:true});await win.webContents.capturePage();await new Promise(r=>setTimeout(r,200));fs.writeFileSync(path.join(dir,'approval-dark.png'),(await win.webContents.capturePage()).toPNG());
+ await win.webContents.executeJavaScript("setTheme({mode:'light'});");await new Promise(r=>setTimeout(r,250));const light=await win.webContents.executeJavaScript("getComputedStyle(document.querySelector('#tool-approval-dialog')).backgroundColor");if(light!=='rgb(255, 255, 255)')throw Error('light theme not applied');checks.push('light theme matches');fs.writeFileSync(path.join(dir,'approval-light.png'),(await win.webContents.capturePage()).toPNG());
+ win.setContentSize(480,720);await new Promise(r=>setTimeout(r,100));const fits=await win.webContents.executeJavaScript("(()=>{const d=document.querySelector('#tool-approval-dialog').getBoundingClientRect();return d.left>=0&&d.right<=innerWidth&&d.bottom<=innerHeight;})()");if(!fits)throw Error('mobile dialog overflows');checks.push('small window fits');fs.writeFileSync(path.join(dir,'approval-small.png'),(await win.webContents.capturePage()).toPNG());console.log(JSON.stringify({passed:checks.length,checks},null,2));fs.unlinkSync(probe);app.exit(0);
+ }catch(e){console.error(e.stack);fs.unlinkSync(probe);app.exit(1);}
+});

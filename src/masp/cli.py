@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,13 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve", help="Start local web application and API")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument(
+        "--native-patch",
+        action="append",
+        type=Path,
+        default=[],
+        help="Native invocation overlay; repeat in precedence order",
+    )
     init = sub.add_parser("init", help="Create a managed project or import a local Git repository")
     init.add_argument("name")
     init.add_argument("--repository")
@@ -35,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         import uvicorn
 
+        if args.native_patch:
+            os.environ["MICRO_MULTI_NATIVE_PATCHES"] = json.dumps(
+                [str(path.resolve()) for path in args.native_patch]
+            )
         uvicorn.run("masp.api:create_app", factory=True, host="127.0.0.1", port=args.port)
         return 0
     method, path, body = "GET", "", None

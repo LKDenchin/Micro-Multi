@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas / 使用交流
+    url: https://github.com/LKDenchin/Micro-Multi/discussions
+    about: Ask questions and share workflows / 提问并分享使用方法
+  - name: Private security report / 私密安全报告
+    url: https://github.com/LKDenchin/Micro-Multi/security/advisories/new
+    about: Report vulnerabilities privately; never publish credentials / 私密提交漏洞，不公开密钥

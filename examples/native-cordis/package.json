@@ -1,0 +1,1 @@
+{"name":"micro-multi-native-example","version":"1.0.0","type":"module","description":"Native Cordis service, event and persistent counter tool","peerDependencies":{"@deepseek-ai/cordis":"4.0.4","@deepseek-ai/dsh-tools":"0.2.0-rc.1"},"microMulti":{"cordis":{"plugins":[{"entry":"counter.mjs","config":{"start":10}},{"entry":"tool.mjs"}]}}}

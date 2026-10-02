@@ -118,6 +118,27 @@ def test_failed_dependency_is_blocked(service, monkeypatch):
     assert next(t for t in run["tasks"] if t["spec_id"] == "add")["state"] == "BLOCKED"
 
 
+def test_successful_dependency_is_integrated_before_downstream_starts(service, monkeypatch):
+    original = FixtureProvider.generate
+    observed = []
+
+    def chained(self, role, payload, schema, max_tokens):
+        if role == "planner":
+            plan = fixture_plan()
+            plan.tasks[0].dependencies = ["subtract"]
+            return Generation(plan.model_dump(), "fixture", 0, 0, 0)
+        if role == "coder" and payload["task"]["id"] == "add":
+            workspace = Path(payload["context"]["workspace"])
+            assert (workspace / "calculator/subtract.py").is_file()
+            assert "calculator/subtract.py" in payload["context"]["existing"]["files"]
+            observed.append(True)
+        return original(self, role, payload, schema, max_tokens)
+
+    monkeypatch.setattr(FixtureProvider, "generate", chained)
+    _, run = execute(service)
+    assert run["state"] == "SUCCEEDED" and observed == [True]
+
+
 def test_cancel_during_planning_and_no_duplicate_run(service, monkeypatch):
     started, release = threading.Event(), threading.Event()
     original = FixtureProvider.generate

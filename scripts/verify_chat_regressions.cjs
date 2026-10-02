@@ -1,0 +1,92 @@
+const {app, BrowserWindow} = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+app.whenReady().then(async () => {
+  const win = new BrowserWindow({show:false, width:1400, height:950, webPreferences:{sandbox:true}});
+  const probePath=path.resolve('src/masp/web/chat_test_probe.js');
+  const original=fs.readFileSync(path.resolve('src/masp/web/chat.js'),'utf8');
+  const names=['dshSettings','projects','conversationId','thread','api','renderSelectors','startNewChat','openConversation','openSettingsPage','applyThemeAndDensity','closeSettingsPage','createOrUpdateThinkingGroup','createOrUpdateToolGroup','createOrUpdateSubagentGroup','persistDshSettingsPatch','settingsSaveQueue','userScrolledUpDuringStream'];
+  fs.writeFileSync(probePath,original+'\n'+names.map(name=>`Object.defineProperty(window, '${name}', {configurable:true,get:()=>${name}});`).join('\n'));
+  win.webContents.session.webRequest.onBeforeRequest({urls:['http://127.0.0.1:8769/static/chat.js*']},(_details,callback)=>callback({redirectURL:'http://127.0.0.1:8769/static/chat_test_probe.js'}));
+  const cleanup=()=>{if(fs.existsSync(probePath))fs.unlinkSync(probePath);};
+  const errors=[];
+  win.webContents.on('console-message', (event) => { if(event.level==='error') errors.push(event.message); });
+  try {
+    await win.loadURL('http://127.0.0.1:8769/');
+    const result = await win.webContents.executeJavaScript(`(async () => {
+      const checks=[];
+      const assert=(value, label)=>{if(!value) throw Error(label); checks.push(label);};
+      for(let i=0;i<100 && !dshSettings?.id;i++) await new Promise(r=>setTimeout(r,50));
+      assert(Boolean(dshSettings.id),'settings loaded');
+      await new Promise(r=>setTimeout(r,500));
+      const p=await api('/projects','POST',{name:'Sidebar regression'});
+      projects.push(p); renderSelectors();
+      await startNewChat(p.id);
+      const savedId=conversationId;
+      assert(Boolean(savedId),'new project chat saved immediately');
+      assert(Boolean(document.querySelector('#projects [data-id="'+savedId+'"]')),'empty chat visible under project');
+      await startNewChat(null);
+      await openConversation(savedId);
+      assert(conversationId===savedId,'empty chat survives switching');
+      assert(localStorage.getItem('masp.lastConversationId')===savedId,'last viewed chat tracked');
+      const tiers=Array.from(document.querySelector('#context-limit-select').options).map(o=>o.value);
+      assert(tiers.join(',')==='32000,64000,128000,256000','four context tiers');
+      assert(!document.querySelector('#dsh-isolate-worktree'),'unimplemented isolation setting removed');
+      assert(!document.querySelector('#dsh-require-team-confirm'),'unimplemented confirmation setting removed');
+      assert(!document.querySelector('#dsh-send-enter'),'duplicate send setting consolidated');
+      openSettingsPage('appearance');
+      const row=document.querySelector('#dsh-compact-density').closest('.setting-row');
+      applyThemeAndDensity({mode:'dark',compactDensity:false});
+      const regular=row.getBoundingClientRect().height;
+      document.querySelector('#dsh-compact-density').checked=true;
+      document.querySelector('#dsh-compact-density').dispatchEvent(new Event('change',{bubbles:true}));
+      assert(document.body.classList.contains('compact-density'),'compact switch applies immediately');
+      assert(row.getBoundingClientRect().height<regular,'compact layout reduces settings height');
+      await settingsSaveQueue;
+      assert((await api('/dsh/settings')).theme.compactDensity,'compact setting persisted');
+      await Promise.all([
+        persistDshSettingsPatch({theme:{compactDensity:false}}),
+        persistDshSettingsPatch({theme:{compactDensity:true}}),
+        persistDshSettingsPatch({agentLoop:{recoveryMaxAttempts:0}}),
+      ]);
+      const saved=await api('/dsh/settings');
+      assert(saved.theme.compactDensity && saved.agentLoop.recoveryMaxAttempts===0,'rapid settings changes persist without lost writes');
+      closeSettingsPage();
+      thread.replaceChildren();
+      let think=createOrUpdateThinkingGroup(null,{status:'thinking',content:'long reasoning\\n'.repeat(150)});
+      thread.append(think); think.open=true;
+      think.querySelector('.thinking-activity-body').scrollTop=110;
+      const thinkingSummary=think.querySelector('summary');
+      const thinkingBody=think.querySelector('.thinking-activity-body');
+      think=createOrUpdateThinkingGroup(think,{status:'thinking',content:'updated reasoning\\n'.repeat(150)});
+      assert(think.open,'thinking stays expanded while streaming');
+      assert(thinkingSummary===think.querySelector('summary') && thinkingBody===think.querySelector('.thinking-activity-body'),'thinking nodes reused during updates');
+      assert(Math.abs(think.querySelector('.thinking-activity-body').scrollTop-110)<1,'thinking scroll survives streaming');
+      think.open=false;
+      think=createOrUpdateThinkingGroup(think,{status:'thinking',content:'new reasoning'});
+      assert(!think.open,'thinking stays collapsed while streaming');
+      let tools=createOrUpdateToolGroup(null,[{name:'read_file',status:'complete',category:'read',output:'output\\n'.repeat(150)}]);
+      thread.append(tools); tools.open=true;
+      const detail=tools.querySelector('.tool-step-detail'); detail.hidden=false; detail.scrollTop=95;
+      tools=createOrUpdateToolGroup(tools,[{name:'read_file',status:'complete',category:'read',output:'output\\n'.repeat(150)},{name:'run_command',status:'running',category:'command'}]);
+      assert(tools.open && !tools.querySelector('.tool-step-detail').hidden,'tool detail stays open during updates');
+      assert(Math.abs(tools.querySelector('.tool-step-detail').scrollTop-95)<1,'tool output scroll survives streaming');
+      assert(detail===tools.querySelector('.tool-step-detail'),'tool output node reused during updates');
+      thread.dispatchEvent(new WheelEvent('wheel',{deltaY:-50,bubbles:true}));
+      assert(userScrolledUpDuringStream,'scrolling up suspends stream follow');
+      tools.open=false;
+      tools=createOrUpdateToolGroup(tools,[{name:'run_command',status:'running',category:'command'}]);
+      assert(!tools.open,'tool group stays collapsed during updates');
+      let sub=createOrUpdateSubagentGroup(null,[{agent_id:'one',agent_name:'one',status:'running',thinking:'running',steps:[]}]);
+      thread.append(sub); sub.open=false;
+      sub=createOrUpdateSubagentGroup(sub,[{agent_id:'one',status:'running',thinking:'more',steps:[]}]);
+      assert(!sub.open,'running subagent stays collapsed');
+      return checks;
+    })()`);
+    if(errors.length) throw Error(errors.join('\n'));
+    const dir=path.resolve('evidence/ui-regression'); fs.mkdirSync(dir,{recursive:true});
+    fs.writeFileSync(path.join(dir,'checks.json'),JSON.stringify(result,null,2));
+    console.log(JSON.stringify({passed:result.length,checks:result},null,2));
+    cleanup(); app.exit(0);
+  } catch(error) {console.error(error.stack); cleanup(); app.exit(1);}
+});
