@@ -1,0 +1,16 @@
+Micro-Multi
+Copyright 2026 Micro-Multi contributors
+
+Original project code is licensed under the Apache License, Version 2.0.
+
+This distribution includes third-party software under its own licenses.
+Adapted DeerFlow code: src/masp/_vendor/deerflow/PROVENANCE.md and LICENSE.
+Cordis / DeepSeek Harness notices: docs/licenses/ and
+docs/UPSTREAM_RUNTIME_PROVENANCE.md; complete installed package licenses
+are retained in resources/app/node_modules in the desktop distribution.
+Electron: resources/LICENSE.electron.txt and LICENSES.chromium.html.
+Python: resources/python/LICENSE.txt (Windows), resources/python/licenses/
+(Linux standalone build), and installed dependency notices.
+Open Code Review and other npm dependencies retain their package notices.
+
+Third-party names identify upstream projects; no endorsement is implied.

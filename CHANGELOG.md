@@ -1,10 +1,12 @@
 # Changelog
 
-## 0.1.0 — 2026-09-28
+## 0.1.0 — 2026-10-02
 
-- Standalone local Web application, REST API, SSE and HTTP CLI.
-- Managed projects and Git imports; versioned plans and contract registry.
-- Isolated DAG execution, structured review, verification and bounded repair.
-- Candidate integration, final gates, ZIP artifacts and durable run history.
-- Deterministic fault-injection benchmark and compatible model adapter.
-- Docker verification adapter that refuses host fallback.
+- Electron desktop workspace for Windows and Linux, with Debian and AppImage distributions.
+- Autonomous multi-agent collaboration, model selection, live team status, and task reports.
+- Persistent conversations, streamed replies, attachments, context compaction, and recovery.
+- Local Git projects, file inspection, diffs, reviews, previews, and command tools.
+- Compatibility with the deepseek-harness (dsh) Cordis Host plugin ecosystem, plus Skills and MCP tools.
+- Operating system credential storage and configurable operation permissions.
+- English and Simplified Chinese interfaces and documentation, with light and dark themes.
+- Bundled Python and Node runtimes, clean initial data, package checks, and release checksums.

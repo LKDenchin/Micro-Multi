@@ -1,99 +1,178 @@
-# MASP · Multi-Agent Software Engineering Platform
+<div align="center">
+  <img src="src/masp/web/micro-multi.svg" alt="Micro-Multi" width="96" />
+  <h1>Micro-Multi</h1>
+  <p><strong>Your local workspace for a team of AI agents.</strong></p>
+  <p>English · <a href="README.zh-CN.md">简体中文</a></p>
+  <p><a href="#quick-install">Install</a> · <a href="#getting-started">Get started</a> · <a href="#documentation">Documentation</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
+  <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
+</div>
 
-独立运行的多 Agent 工程工作台。输入需求，查看规划、契约、隔离开发、审查、验证、修复和交付的完整过程。
+Micro-Multi brings conversations, code, tools, and a team of agents into one desktop workspace. Describe what you want to build: the lead agent can break down the work, bring in specialists, run tasks in parallel, review their results, and continue until the work is ready for you to inspect.
 
-依据 [产品开发规格书](PRODUCT_DEVELOPMENT_SPEC.md) 第 25 节构建的 **MVP**。
-界面为中文，提供 REST API、SSE 实时事件及共享同一 API 的 CLI。
+Connect your own OpenAI-compatible model endpoint, choose models for different agents, and work with your local Git projects. You can follow what each agent is doing, inspect the files it changes, and keep the conversation for the next session.
 
-## 快速启动
 
-需要 Python 3.11+、Git。Windows PowerShell：
+**Compatible with the deepseek-harness (dsh) plugin ecosystem.** Micro-Multi runs native dsh Cordis Host plugins, bringing their tools into the lead agent and specialist agents in your desktop workspace.
 
-```powershell
+| | What you can do |
+| --- | --- |
+| **dsh plugin compatibility** | Load native deepseek-harness Cordis Host packages with tool registration, services, dependency injection, events, and lifecycle management. |
+| **A team that works together** | Delegate to specialist agents, run independent tasks concurrently, and collect reports as they finish. |
+| **Your models, your choice** | Configure compatible API endpoints, test connections, and choose a model for each agent. |
+| **A visible workspace** | Browse projects, files, diffs, reviews, previews, terminal output, and tool records without switching apps. |
+| **Conversations that continue** | Keep streamed replies and task history locally; resume work and compact context as a session grows. |
+| **Tools you can extend** | Add Skills, MCP servers, local command plugins, and Cordis Host packages. |
+| **Control when you need it** | Choose permissions, inspect requested operations, pause work, and stop a running turn. |
+| **A desktop that fits your workflow** | Paste attachments, pick project folders, and switch between English and Chinese, light and dark themes. |
+
+---
+
+## Quick Install
+
+Download the package for your system from the **[Releases page](https://github.com/LKDenchin/Micro-Multi/releases/latest)**. To build a package yourself, follow the [desktop build guide](docs/DESKTOP_RELEASE.md).
+
+| Platform / 平台 | Download / 下载 |
+| --- | --- |
+| Windows x64 | [Micro-Multi-Setup-0.1.0-x64.exe](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
+| Debian / Ubuntu x64 | [Micro-Multi-0.1.0-amd64.deb](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |
+| Linux x64 AppImage | [Micro-Multi-0.1.0-x86_64.AppImage](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-x86_64.AppImage) |
+| SHA-256 | [SHA256SUMS.txt](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/SHA256SUMS.txt) |
+
+### Windows
+
+Run `Micro-Multi-Setup-0.1.0-x64.exe`, choose an installation directory, and launch Micro-Multi from the Start menu.
+
+### Linux — Debian / Ubuntu
+
+```bash
+sudo apt install ./Micro-Multi-0.1.0-amd64.deb
+micro-multi
+```
+
+### Linux — AppImage
+
+```bash
+chmod +x Micro-Multi-0.1.0-x86_64.AppImage
+./Micro-Multi-0.1.0-x86_64.AppImage
+```
+
+If FUSE is unavailable, run the AppImage with `--appimage-extract-and-run`.
+
+On Ubuntu 24.04+, enable the application-specific user namespace policy described in the [AppImage setup guide](docs/DESKTOP_RELEASE.md#ubuntu-appimage-sandbox-policy).
+
+The desktop packages include Python and Node. Install Git for repository operations; Docker and external extension tools are optional and installed separately. Linux model-key storage requires an active Secret Service keyring, such as GNOME Keyring. Compare your download against `SHA256SUMS.txt`; the Windows installer is currently unsigned.
+
+---
+
+## Getting Started
+
+1. **Connect a model.** Open Models, enter your API endpoint, model ID, and key, then test the connection.
+2. **Open a project.** Create a project or import a local Git repository.
+3. **Describe the outcome.** Start a conversation with a task such as “Add pagination to this API and verify the behavior.”
+4. **Let the team work.** Choose multi-agent collaboration when the task benefits from specialists, or use the lead agent alone.
+5. **Review the result.** Inspect changed files, tool activity, reviews, and verification before using the work.
+
+You can adjust an agent's model or responsibility, add an attachment, and continue the conversation with feedback. Projects and conversations are kept locally across sessions.
+
+---
+
+## Models and Extensions
+
+Use an endpoint compatible with OpenAI Chat Completions. Micro-Multi stores model-profile keys in the operating system credential store; no model credentials are included in the app.
+
+Skills give agents reusable instructions. Discover project Skills in `.agents/skills/`, or add user Skills through the workspace. MCP servers and plugins connect additional tools. Install trusted extensions from Settings and inspect the access they request.
+
+See [autonomous collaboration](docs/AUTONOMOUS_COLLABORATION.md) and the [extension guide](docs/NATIVE_CORDIS.md) for more details.
+
+---
+
+## deepseek-harness Plugin Ecosystem
+
+Micro-Multi uses the official dsh Cordis and tools runtimes. Load a built dsh Cordis Host package from Settings → Extensions: its tools become available to both the lead agent and specialist agents. Plugins can register services, inject dependencies, validate configuration and tool parameters, publish events, and release resources when disabled or removed.
+
+Each package keeps its own state within a workspace. The host provides `tools`, `systemPrompt`, and `microMulti` services; `microMulti.workspace` and `microMulti.pluginRoot` expose the workspace and package locations. Use these host services when developing plugins.
+
+Try the included [`examples/native-cordis`](examples/native-cordis) package, or follow the [dsh plugin guide](docs/NATIVE_CORDIS.md) to load your own package. See the [dsh repository](https://github.com/deepseek-ai/deepseek-harness) for the plugin framework.
+
+---
+
+## Workspace Quick Reference
+
+| Action | Where to find it |
+| --- | --- |
+| Add or test a model | Models |
+| Create or import a project | Project navigation |
+| Start or reopen a conversation | Conversation list |
+| Choose collaboration mode or a model | Conversation composer |
+| Follow individual agents | Team view and tool records |
+| Inspect files, diffs, reviews, or terminal activity | Workspace inspector |
+| Add Skills, MCP servers, or plugins | Settings / extensions |
+| Change language, theme, or layout | Settings |
+
+---
+
+## Run from Source
+
+Use Python 3.11+, Node.js 24+, npm, and Git. From the repository root:
+
+```bash
 python -m venv .venv
-.venv/Scripts/python -m pip install -e '.[dev]'
-.venv/Scripts/masp serve
 ```
 
-macOS / Linux：
+Activate the environment with `source .venv/bin/activate` on Linux/macOS or `.\.venv\Scripts\Activate.ps1` in Windows PowerShell, then run:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
-.venv/bin/masp serve
+python -m pip install -e ".[dev]"
+npm ci
+npm run desktop
 ```
 
-打开 **http://127.0.0.1:8765**，点击「体验完整验收流程」。
-内置示例会创建真实 Git 仓库，启动两个独立任务，故意产生一次减法测试失败，
-修复后通过最终检查，合并到托管项目分支并提供 ZIP 下载。
+For browser access, run `python -m masp.cli serve` and open <http://127.0.0.1:8765/>.
 
-**示例模式是固定算术 benchmark，不是通用需求代码生成。** 它不调用模型、不消耗 tokens，
-不执行任意生成代码：语法编译和有限 AST 解释器提供可复现验证。
+| Setting | Purpose |
+| --- | --- |
+| `MASP_HOME` | Override local data storage; source default is `.masp` |
+| `MASP_PORT` | Desktop backend port; default `8765` |
+| `MASP_MODEL_BASE_URL` | Optional environment-configured model endpoint |
+| `MASP_MODEL_NAME` | Optional environment-configured model ID |
+| `MASP_MODEL_API_KEY` | Optional model credential; never commit it |
 
-## 开发真实需求
+Installed data defaults to `%APPDATA%\Micro-Multi\data` on Windows and `${XDG_CONFIG_HOME:-~/.config}/Micro-Multi/data` on Linux. Updates and uninstall preserve user data.
 
-先准备 Docker 与受信任的 Python 工具链镜像，并配置兼容模型服务：
+---
 
-```powershell
-$env:MASP_MODEL_BASE_URL = 'http://127.0.0.1:8000/v1'
-$env:MASP_MODEL_NAME = 'your-model-name'
-# 只有服务需要凭证时才设置 MASP_MODEL_API_KEY；不要写入项目或日志。
-docker pull python:3.12-slim
-.venv/Scripts/masp serve
-```
+## Documentation
 
-在创建项目时选择「真实模型」。模型通过结构化 JSON 输出计划、文件提案和审查问题。
-需要遵循 JSON 指令的模型；不支持的输出会留下失败证据。
-真实代码的所有验证仅在限制网络、CPU、内存、进程数与写权限的 Docker 容器中执行。
-缺少 Docker 不会降级到宿主机。项目依赖须预装到 `MASP_SANDBOX_IMAGE` 指定镜像。
+| Guide | What's covered |
+| --- | --- |
+| [Desktop build and release](docs/DESKTOP_RELEASE.md) | Building installers, running checks, and publishing packages |
+| [Autonomous collaboration](docs/AUTONOMOUS_COLLABORATION.md) | Delegation, parallel work, progress, and review |
+| [Extensions](docs/NATIVE_CORDIS.md) | Cordis Host packages and a working example |
+| [Persistence and recovery](docs/DURABLE_TURNS_AND_MODEL_RECOVERY.md) | Saved turns, interruptions, and recovery |
+| [Security](SECURITY.md) | Data, command permissions, and reporting vulnerabilities |
+| [Contributing](CONTRIBUTING.md) | Development setup, checks, and pull requests |
+| [Changelog](CHANGELOG.md) | Release history |
 
-## CLI
+---
 
-先启动服务，再在另一个终端执行：
+## Contributing
+
+Contributions are welcome: bug fixes, tests, translations, documentation, and extensions. Read [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md), and include the validation you actually ran.
 
 ```bash
-masp init calculator
-masp projects
-masp run PROJECT_ID "构建加法与减法模块并验证" --inject-failure
-masp inspect RUN_ID
-masp tasks PROJECT_ID
-masp agents PROJECT_ID
-masp logs RUN_ID
-masp replay RUN_ID
-masp verify RUN_ID
-masp pause RUN_ID
-masp resume RUN_ID
-masp cancel RUN_ID
-masp retry RUN_ID
-```
-
-`masp init NAME --repository ABSOLUTE_PATH` 导入本地 Git 仓库的已提交历史。
-源仓库、未提交内容及源分支保持不变。MVP 暂不提供远程 URL 导入。
-`verify` 查看已有执行证据；`retry` 从托管仓库当前版本新建运行，不伪称精确重放。
-
-## 验证开发环境
-
-```bash
-python -m ruff check src tests scripts
-python -m ruff format --check src tests scripts
-python -m mypy src/masp
 python -m pytest -q
-python -m compileall -q src
-python -m build
-python scripts/benchmark.py --workers 1 2 4 --output evidence/benchmark.json
+python -m ruff check src tests scripts
+python -m mypy src/masp
 ```
 
-完整规格符合性、已验证证据与限制见 [验收报告](docs/ACCEPTANCE.md)。
-主要架构和扩展接口见 [架构说明](docs/architecture.md)。
+## Community
 
-## 当前边界
+Use [Issues](https://github.com/LKDenchin/Micro-Multi/issues) for reproducible bugs and feature requests. Include your version, operating system, reproduction steps, and sanitized logs. For questions and ideas, visit [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions). Report vulnerabilities through the private channel described in [SECURITY.md](SECURITY.md).
 
-- 单用户本地服务，绑定 loopback；不是面向公网的多租户 SaaS。
-- SQLite 持久化；最大 2 个并行 Run，每个 Run 最多 4 个 Coder。
-- 暂停在安全边界生效，进行中的模型请求最长等待其超时；取消不会发布未验证产物。
-- 服务重启将未完成运行标记为需要人工处理，不推测成功，不自动恢复半执行进程。
-- 合并冲突保留工作区与日志，需人工处理；不自动强制覆盖或推送。
-- 自定义工作流编辑、通用人工审批节点、模型市场、精确重放与计费属于后续 V1。
-- 真实模型和 Docker 运行是否在当前环境验证，以验收报告为准。
+Your conversations and uploads stay in local storage, but configured models and enabled extensions can receive the context needed to perform tasks. Local command execution runs on your machine; permission checks are not an operating system sandbox.
 
-Apache-2.0。欢迎通过测试、模型适配器、工具适配器和缺陷报告参与贡献。
+---
+
+## License
+
+[Apache-2.0](LICENSE). Third-party components retain their licenses and notices; see [NOTICE](NOTICE) and [runtime provenance](docs/UPSTREAM_RUNTIME_PROVENANCE.md).

@@ -1,0 +1,67 @@
+name: Desktop package build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.7'
+      - run: npm ci
+      - run: npm run desktop:dist
+      - run: python scripts/smoke_packaged_desktop.py
+      - run: python scripts/release_checksums.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Micro-Multi-windows-x64
+          path: |
+            dist/desktop/Micro-Multi-Setup-*.exe
+            dist/desktop/SHA256SUMS.txt
+          if-no-files-found: error
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install desktop test dependencies
+        run: sudo apt-get update && sudo apt-get install -y binutils libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libxtst6 libnotify4 libatspi2.0-0 gnome-keyring dbus-x11 xvfb xauth
+      - run: npm ci
+      - run: npm run desktop:dist:linux
+      - name: Configure unpacked Chromium sandbox for testing
+        run: sudo chown root:root dist/desktop/linux-unpacked/chrome-sandbox && sudo chmod 4755 dist/desktop/linux-unpacked/chrome-sandbox
+      - name: Smoke test Linux desktop
+        run: dbus-run-session -- bash -c 'eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"; xvfb-run -a python scripts/smoke_packaged_desktop.py'
+      - name: Install and test Debian package
+        run: |
+          sudo apt-get install -y ./dist/desktop/Micro-Multi-0.1.0-amd64.deb
+          dbus-run-session -- bash -c 'eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"; xvfb-run -a python scripts/smoke_packaged_desktop.py --app-dir /opt/Micro-Multi'
+          sudo apt-get remove -y micro-multi
+      - name: Configure AppImage namespace policy
+        run: |
+          sudo install -m 644 desktop/micro-multi-appimage.apparmor /etc/apparmor.d/micro-multi-appimage
+          sudo apparmor_parser -r /etc/apparmor.d/micro-multi-appimage
+      - name: Test AppImage entry point
+        run: dbus-run-session -- bash -c 'eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"; xvfb-run -a python scripts/smoke_packaged_desktop.py --startup-timeout 180 --appimage dist/desktop/Micro-Multi-0.1.0-x86_64.AppImage'
+      - run: python scripts/release_checksums.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Micro-Multi-linux-x64
+          path: |
+            dist/desktop/Micro-Multi-*.deb
+            dist/desktop/Micro-Multi-*.AppImage
+            dist/desktop/SHA256SUMS.txt
+          if-no-files-found: error

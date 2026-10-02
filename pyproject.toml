@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "masp-workspace"
 version = "0.1.0"
-description = "An observable, contract-driven multi-agent engineering workspace"
+description = "Local multi-agent desktop workspace compatible with deepseek-harness (dsh) plugins"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
-dependencies = ["fastapi>=0.115,<1", "pydantic>=2.10,<3", "uvicorn>=0.34,<1", "httpx>=0.28,<1"]
+dependencies = ["fastapi>=0.115,<1", "pydantic>=2.10,<3", "uvicorn>=0.34,<1", "httpx>=0.28,<1", "keyring>=25,<27", "mcp>=2.2,<3", "httpx2>=2.13,<3", "jsonschema>=4.26,<5"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "mypy>=1.15,<3", "ruff>=0.11,<1", "build>=1.2,<2"]
@@ -17,11 +17,18 @@ dev = ["pytest>=8,<10", "mypy>=1.15,<3", "ruff>=0.11,<1", "build>=1.2,<2"]
 [project.scripts]
 masp = "masp.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/LKDenchin/Micro-Multi"
+Repository = "https://github.com/LKDenchin/Micro-Multi"
+Documentation = "https://github.com/LKDenchin/Micro-Multi#readme"
+Issues = "https://github.com/LKDenchin/Micro-Multi/issues"
+Releases = "https://github.com/LKDenchin/Micro-Multi/releases"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-masp = ["web/*"]
+masp = ["web/*", "native/*.mjs", "_vendor/deerflow/LICENSE", "_vendor/deerflow/PROVENANCE.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -33,6 +40,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # Ruff formatter handles code wrapping; preserve long prompts and URLs.
 
 [tool.mypy]
 python_version = "3.11"
@@ -40,3 +48,14 @@ files = ["src/masp"]
 check_untyped_defs = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"src/masp/_vendor/**" = ["ALL"]
+
+[[tool.mypy.overrides]]
+module = ["masp._vendor.*"]
+ignore_errors = true

@@ -117,6 +117,164 @@ class FixtureTool:
         )
 
 
+class LocalTool:
+    """Run declared project checks locally after the user selects local execution."""
+
+    @staticmethod
+    def _normalize_local_command(root: Path, command: list[str]) -> list[str]:
+        import sys
+
+        if not command:
+            return command
+        cmd = [str(part) for part in command]
+        head = Path(cmd[0]).name.lower()
+        if head in {"python", "python3", "python.exe", "python3.exe"}:
+            return [sys.executable, "-X", "utf8", *cmd[1:]]
+        if os.name == "nt":
+            if head == "test" and len(cmd) >= 3 and cmd[1] in {"-f", "-e", "-s", "-d", "-r"}:
+                flag = cmd[1]
+                target_file = cmd[2]
+                code = (
+                    f"import pathlib, sys; p = pathlib.Path({target_file!r}); "
+                    f"ok = p.is_dir() if {flag == '-d'!r} else (p.is_file() and p.stat().st_size > 0 if {flag == '-s'!r} else p.exists()); "
+                    "sys.exit(0 if ok else 1)"
+                )
+                return [sys.executable, "-X", "utf8", "-c", code]
+            if head in {"ls", "cat", "head", "tail"}:
+                file_args = [a for a in cmd[1:] if not a.startswith("-")]
+                if not file_args:
+                    return [sys.executable, "-X", "utf8", "-c", "import os; print(os.listdir('.'))"]
+                code = (
+                    f"import pathlib, sys; files = {file_args!r}; "
+                    "missing = [f for f in files if not pathlib.Path(f).exists()]; "
+                    "sys.exit(1 if missing else 0)"
+                )
+                return [sys.executable, "-X", "utf8", "-c", code]
+            if head == "grep" and len(cmd) >= 3:
+                non_flags = [a for a in cmd[1:] if not a.startswith("-")]
+                ignore_case = any(a in {"-i", "-qi", "-iq"} for a in cmd[1:])
+                if len(non_flags) >= 2:
+                    pattern = non_flags[0]
+                    targets = non_flags[1:]
+                    code = (
+                        f"import pathlib, re, sys; pat = {pattern!r}; files = {targets!r}; "
+                        f"flags = re.I if {ignore_case!r} else 0; "
+                        "found = any(pathlib.Path(f).is_file() and re.search(pat, pathlib.Path(f).read_text('utf-8', errors='replace'), flags) for f in files); "
+                        "sys.exit(0 if found else 1)"
+                    )
+                    return [sys.executable, "-X", "utf8", "-c", code]
+            if head in {"sh", "bash"} and len(cmd) >= 3 and cmd[1] == "-c":
+                script = cmd[2]
+                if "node --check" in script:
+                    import shlex
+
+                    parts = shlex.split(script)
+                    if "node" in parts:
+                        idx = parts.index("node")
+                        resolved_node = shutil.which("node") or "node"
+                        return [resolved_node, *parts[idx + 1 :]]
+                pwsh = shutil.which("powershell") or "powershell"
+                return [pwsh, "-NoProfile", "-Command", script]
+            resolved = shutil.which(cmd[0])
+            if resolved:
+                return [resolved, *cmd[1:]]
+        return cmd
+
+    def execute(self, root: Path, check: Check, stop: Callable[[], bool]) -> CheckResult:
+        started = time.monotonic()
+        base: dict[str, Any] = {"name": check.name, "layer": check.layer, "command": check.command}
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key.upper()
+            in {
+                "PATH",
+                "PATHEXT",
+                "SYSTEMROOT",
+                "WINDIR",
+                "TEMP",
+                "TMP",
+                "HOME",
+                "USERPROFILE",
+                "VIRTUAL_ENV",
+                "LANG",
+                "LC_ALL",
+            }
+        }
+        environment["PYTHONNOUSERSITE"] = "1"
+        environment["PYTHONUTF8"] = "1"
+        environment["PYTHONIOENCODING"] = "utf-8"
+        effective_command = self._normalize_local_command(root, check.command)
+        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+            try:
+                process = subprocess.Popen(
+                    effective_command,
+                    cwd=root,
+                    env=environment,
+                    stdout=stdout,
+                    stderr=stderr,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+                    start_new_session=os.name != "nt",
+                )
+            except (OSError, ValueError) as error:
+                return CheckResult(
+                    **base,
+                    status="failed",
+                    exit_code=None,
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    stderr=f"Unable to start check: {type(error).__name__}",
+                    error_type="BUILD_ERROR" if check.layer == "build" else "TEST_ERROR",
+                )
+            error_type = None
+            while process.poll() is None:
+                oversized = (
+                    max(
+                        os.fstat(stdout.fileno()).st_size,
+                        os.fstat(stderr.fileno()).st_size,
+                    )
+                    > 2_000_000
+                )
+                if stop() or time.monotonic() - started > check.timeout or oversized:
+                    error_type = (
+                        "CANCELLED" if stop() else "RESOURCE_ERROR" if oversized else "TIMEOUT"
+                    )
+                    if os.name == "nt":
+                        subprocess.run(
+                            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                            capture_output=True,
+                            timeout=10,
+                            check=False,
+                        )
+                    else:
+                        import signal
+
+                        os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
+                    if process.poll() is None:
+                        process.kill()
+                    break
+                time.sleep(0.05)
+            process.wait(timeout=10)
+            stdout.seek(0)
+            stderr.seek(0)
+            out = stdout.read(65536).decode("utf-8", errors="replace")
+            err = stderr.read(65536).decode("utf-8", errors="replace")
+        if process.returncode and not error_type:
+            error_type = "BUILD_ERROR" if check.layer == "build" else "TEST_ERROR"
+        return CheckResult(
+            **base,
+            status="cancelled"
+            if error_type == "CANCELLED"
+            else "failed"
+            if error_type
+            else "passed",
+            exit_code=process.returncode,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            stdout=out,
+            stderr=err,
+            error_type=error_type,
+        )
+
+
 class DockerTool:
     """Only a disposable, read-only copy of project files is mounted into the sandbox."""
 

@@ -14,8 +14,9 @@ def client(tmp_path):
 
 def test_web_assets_and_openapi(client):
     assert client.get("/").status_code == 200
-    assert "工程工作台" in client.get("/").text
-    assert client.get("/static/app.js").status_code == 200
+    assert 'id="composer"' in client.get("/").text
+    assert client.get("/static/chat.js").status_code == 200
+    assert client.get("/workspace").status_code == 404
     assert "/api/projects" in client.get("/openapi.json").json()["paths"]
     assert client.get("/api/health").json()["status"] == "ok"
 

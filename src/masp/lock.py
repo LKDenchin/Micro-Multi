@@ -23,7 +23,7 @@ class InstanceLock:
                 fcntl.flock(self.stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             self.stream.close()
-            raise ValueError("Another MASP service owns this data directory") from None
+            raise ValueError("Another Micro-Multi service owns this data directory") from None
 
     def close(self) -> None:
         self.stream.close()
