@@ -3,7 +3,7 @@
   <h1>Micro-Multi</h1>
   <p><strong>Your local workspace for a team of AI agents.</strong></p>
   <p>English · <a href="README.zh-CN.md">简体中文</a></p>
-  <p><a href="#quick-install">Install</a> · <a href="#getting-started">Get started</a> · <a href="#documentation">Documentation</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
+  <p><a href="https://lkdenchin.github.io/Micro-Multi/">Website</a> · <a href="#quick-install">Install</a> · <a href="#getting-started">Get started</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme.html">Documentation</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
   <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
 </div>
 
@@ -31,7 +31,7 @@ Connect your own OpenAI-compatible model endpoint, choose models for different a
 
 Download the package for your system from the **[Releases page](https://github.com/LKDenchin/Micro-Multi/releases/latest)**. To build a package yourself, follow the [desktop build guide](docs/DESKTOP_RELEASE.md).
 
-| Platform / 平台 | Download / 下载 |
+| Platform | Download |
 | --- | --- |
 | Windows x64 | [Micro-Multi-Setup-0.1.0-x64.exe](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
 | Debian / Ubuntu x64 | [Micro-Multi-0.1.0-amd64.deb](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |

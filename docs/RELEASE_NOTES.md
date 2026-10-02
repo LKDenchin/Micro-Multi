@@ -47,4 +47,6 @@ Micro-Multi 将本地多 Agent 开发工作台带到 Windows 和 Linux。
 
 ---
 
-[English documentation](https://github.com/LKDenchin/Micro-Multi/blob/v0.1.0/README.md) · [简体中文文档](https://github.com/LKDenchin/Micro-Multi/blob/v0.1.0/README.zh-CN.md) · [Changelog](https://github.com/LKDenchin/Micro-Multi/blob/v0.1.0/CHANGELOG.md) · [Issues](https://github.com/LKDenchin/Micro-Multi/issues) · [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions)
+[English documentation](https://lkdenchin.github.io/Micro-Multi/docs/readme.html) · [简体中文文档](https://lkdenchin.github.io/Micro-Multi/docs/readme-zh-cn.html) · [Changelog](https://github.com/LKDenchin/Micro-Multi/blob/v0.1.0/CHANGELOG.md) · [Issues](https://github.com/LKDenchin/Micro-Multi/issues) · [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions)
+
+[Project website / 项目官网](https://lkdenchin.github.io/Micro-Multi/) · [简体中文介绍](https://lkdenchin.github.io/Micro-Multi/zh/)

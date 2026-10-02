@@ -3,7 +3,7 @@
   <h1>Micro-Multi</h1>
   <p><strong>让一支 AI Agent 团队，在你的本地工作区协作。</strong></p>
   <p><a href="README.md">English</a> · 简体中文</p>
-  <p><a href="#快速安装">安装</a> · <a href="#开始使用">开始使用</a> · <a href="#文档">文档</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
+  <p><a href="https://lkdenchin.github.io/Micro-Multi/zh/">官网</a> · <a href="#快速安装">安装</a> · <a href="#开始使用">开始使用</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme-zh-cn.html">文档</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
   <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
 </div>
 
@@ -31,7 +31,7 @@ Micro-Multi 将对话、代码、工具和 Agent 团队放进同一个桌面工�
 
 在**[Releases 页面](https://github.com/LKDenchin/Micro-Multi/releases/latest)**下载对应系统的软件包。自行构建请参考[桌面构建指南](docs/DESKTOP_RELEASE.md)。
 
-| Platform / 平台 | Download / 下载 |
+| 平台 | 下载 |
 | --- | --- |
 | Windows x64 | [Micro-Multi-Setup-0.1.0-x64.exe](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
 | Debian / Ubuntu x64 | [Micro-Multi-0.1.0-amd64.deb](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |
