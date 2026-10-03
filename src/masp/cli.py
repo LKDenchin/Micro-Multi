@@ -12,10 +12,10 @@ import httpx
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="masp", description="Multi-agent engineering workspace")
-    parser.add_argument("--url", default="http://127.0.0.1:8765")
+    parser.add_argument("--url", default="http://127.0.0.1:3080")
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve", help="Start local web application and API")
-    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--port", type=int, default=3080)
     serve.add_argument(
         "--native-patch",
         action="append",

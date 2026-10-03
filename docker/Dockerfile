@@ -5,5 +5,5 @@ COPY . .
 RUN pip install --no-cache-dir . && useradd --uid 1000 --create-home masp && mkdir /data && chown masp /data
 USER masp
 ENV MASP_HOME=/data
-EXPOSE 8765
-CMD ["uvicorn", "masp.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8765"]
+EXPOSE 3080
+CMD ["uvicorn", "masp.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "3080"]

@@ -953,7 +953,7 @@ class Service:
 
         return {
             "version": __version__,
-            "build_id": "2026-10-02-v17-parallel-collaboration",
+            "build_id": "2026-10-03-v20-compact-extension-settings",
             "builtin_mcp_ready": True,
             "open_code_review": ocr_engine_status(),
             "docker_available": shutil.which("docker") is not None,

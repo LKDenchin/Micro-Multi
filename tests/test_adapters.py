@@ -55,7 +55,7 @@ def test_cli_is_http_client(monkeypatch, capsys):
 
     monkeypatch.setattr("masp.cli.httpx.request", request)
     assert main(["init", "CLI project"]) == 0
-    assert called[0][1] == "http://127.0.0.1:8765/api/projects"
+    assert called[0][1] == "http://127.0.0.1:3080/api/projects"
     assert called[0][2]["name"] == "CLI project"
     assert json.loads(capsys.readouterr().out)["id"] == "project-test"
 

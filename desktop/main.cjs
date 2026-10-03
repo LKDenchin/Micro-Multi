@@ -1,14 +1,53 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, shell, clipboard, crashReporter } = require('electron');
-const { spawn } = require('node:child_process');
+const { spawn, execFileSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+
+function externalApplications() {
+  const roots = [process.env.LOCALAPPDATA, process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean);
+  const candidates = roots.flatMap(root => [
+    ['vscode', 'Visual Studio Code', path.join(root, 'Programs', 'Microsoft VS Code', 'Code.exe')],
+    ['vscode', 'Visual Studio Code', path.join(root, 'Microsoft VS Code', 'Code.exe')],
+    ['cursor', 'Cursor', path.join(root, 'Programs', 'cursor', 'Cursor.exe')],
+    ['notepad++', 'Notepad++', path.join(root, 'Notepad++', 'notepad++.exe')],
+  ]);
+  if (process.platform === 'win32') {
+    for (const [id, name, executableName] of [['vscode', 'Visual Studio Code', 'Code.exe'], ['cursor', 'Cursor', 'Cursor.exe'], ['notepad++', 'Notepad++', 'notepad++.exe']]) {
+      try {
+        const output = execFileSync('where.exe', [executableName], {encoding:'utf8', timeout:1500, windowsHide:true, stdio:['ignore','pipe','ignore']});
+        for (const executable of output.trim().split(/\r?\n/)) candidates.push([id, name, executable]);
+      } catch {}
+      for (const hive of ['HKCU', 'HKLM']) {
+        try {
+          const output = execFileSync('reg.exe', ['query', `${hive}\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${executableName}`, '/ve'], {encoding:'utf8', timeout:1500, windowsHide:true, stdio:['ignore','pipe','ignore']});
+          const match = output.match(/REG_SZ\s+(.+)/);
+          if (match) candidates.push([id, name, match[1].trim().replace(/^"|"$/g, '')]);
+        } catch {}
+      }
+    }
+    candidates.push(['notepad', '记事本', path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'notepad.exe')]);
+  }
+  const found = new Map();
+  for (const [id, name, executable] of candidates) if (fs.existsSync(executable) && !found.has(id)) found.set(id, {id, name, executable});
+  return [...found.values()];
+}
+ipcMain.handle('masp:external-applications', () => externalApplications().map(({id, name}) => ({id, name})));
+ipcMain.handle('masp:open-file-with', async (event, { file, application }) => {
+  if (!event.senderFrame?.url.startsWith(appUrl)) throw new Error('Invalid origin');
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !fs.statSync(file).isFile()) throw new Error('Invalid file');
+  if (application === 'explorer') { shell.showItemInFolder(file); return; }
+  if (application === 'default') { const error = await shell.openPath(file); if (error) throw new Error(error); return; }
+  const editor = externalApplications().find(item => item.id === application);
+  if (!editor) throw new Error('Editor is unavailable');
+  spawn(editor.executable, [file], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+});
 
 app.setName('Micro-Multi');
 if (process.platform === 'win32') app.setAppUserModelId('Micro-Multi');
 const projectRoot = path.resolve(__dirname, '..');
-const port = Number(process.env.MASP_PORT || 8765);
+const port = Number(process.env.MASP_PORT || 3080);
 const appUrl = `http://127.0.0.1:${port}/`;
-const EXPECTED_BUILD_ID = '2026-10-02-v17-parallel-collaboration';
+const EXPECTED_BUILD_ID = '2026-10-03-v20-compact-extension-settings';
 let backend;
 let ownsBackend = false;
 let mainWindow;

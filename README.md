@@ -127,12 +127,12 @@ npm ci
 npm run desktop
 ```
 
-For browser access, run `python -m masp.cli serve` and open <http://127.0.0.1:8765/>.
+For browser access, run `python -m masp.cli serve` and open <http://127.0.0.1:3080/>.
 
 | Setting | Purpose |
 | --- | --- |
 | `MASP_HOME` | Override local data storage; source default is `.masp` |
-| `MASP_PORT` | Desktop backend port; default `8765` |
+| `MASP_PORT` | Desktop backend port; default `3080` |
 | `MASP_MODEL_BASE_URL` | Optional environment-configured model endpoint |
 | `MASP_MODEL_NAME` | Optional environment-configured model ID |
 | `MASP_MODEL_API_KEY` | Optional model credential; never commit it |

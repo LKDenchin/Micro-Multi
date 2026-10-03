@@ -127,12 +127,12 @@ npm ci
 npm run desktop
 ```
 
-使用浏览器时，执行 `python -m masp.cli serve`，打开 <http://127.0.0.1:8765/>。
+使用浏览器时，执行 `python -m masp.cli serve`，打开 <http://127.0.0.1:3080/>。
 
 | 设置 | 用途 |
 | --- | --- |
 | `MASP_HOME` | 指定本地数据目录；源码运行默认使用 `.masp` |
-| `MASP_PORT` | 桌面后端端口，默认 `8765` |
+| `MASP_PORT` | 桌面后端端口，默认 `3080` |
 | `MASP_MODEL_BASE_URL` | 可选的环境变量模型 API 地址 |
 | `MASP_MODEL_NAME` | 可选的环境变量模型 ID |
 | `MASP_MODEL_API_KEY` | 可选模型密钥，不应提交到仓库 |
