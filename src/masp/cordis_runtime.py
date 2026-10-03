@@ -113,7 +113,7 @@ def native_manifest(root: Path) -> dict[str, Any] | None:
         normalized.append(
             {"entry": str(file.relative_to(resolved)), "config": item.get("config", {})}
         )
-    return {"root": str(resolved), "plugins": normalized}
+    return {"root": str(resolved), "plugins": normalized, "client": dsh.get("client")}
 
 
 class CordisWorker:
@@ -128,6 +128,7 @@ class CordisWorker:
             int, tuple[queue.Queue[dict[str, Any]], NativeApprovalBridge | None]
         ] = {}
         self.events: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.stream_events: dict[str, queue.Queue[dict[str, Any]]] = {}
         self.counter = 0
         self.closing = False
         self.last_used = time.monotonic()
@@ -159,6 +160,7 @@ class CordisWorker:
             }
         }
         env["MICRO_MULTI_WORKSPACE"] = str(workspace)
+        env["DSH_HOME"] = str(home.resolve())
         env["ELECTRON_RUN_AS_NODE"] = "1"
         self.process = subprocess.Popen(
             [node, "--max-old-space-size=256", str(HOST)],
@@ -230,8 +232,15 @@ class CordisWorker:
                     packet = json.loads(value[len(PREFIX) :])
                     if packet.get("event") == "heartbeat":
                         self.last_heartbeat = time.monotonic()
-                    elif packet.get("event") in {"bridge", "chat-event"}:
-                        self.events.put(packet)
+                    elif packet.get("event") in {
+                        "bridge",
+                        "chat-event",
+                        "plugin-model-chunk",
+                        "plugin-stream-value",
+                    }:
+                        with self.pending_lock:
+                            target_stream = self.stream_events.get(packet.get("streamId", ""))
+                        (target_stream if target_stream is not None else self.events).put(packet)
                     elif packet.get("event") == "approval":
                         with self.pending_lock:
                             target = self.pending.get(packet.get("requestId"))
@@ -308,7 +317,7 @@ class CordisWorker:
             while True:
                 if bridge and time.monotonic() - self.last_heartbeat > 30:
                     raise queue.Empty("Native event loop stopped responding")
-                if bridge and bridge.cancelled() and not cancel_sent:
+                if bridge and (bridge.closed or bridge.cancelled()) and not cancel_sent:
                     self.control("cancel-call", id=identity)
                     deadline = min(deadline, time.monotonic() + 5)
                     cancel_sent = True
@@ -650,6 +659,9 @@ def execute_native(store: Store, plugin: dict[str, Any], arguments: str, workspa
 
 
 def close_native_hosts(store: Store | None = None, bundle_id: str | None = None) -> None:
+    from masp.plugin_surface import close_surfaces
+
+    close_surfaces(store, bundle_id)
     with _guard:
         keys = [key for key in _workers if store is None or key[0] == str(store.path.resolve())]
         if bundle_id is not None:

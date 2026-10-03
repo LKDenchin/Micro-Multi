@@ -28,6 +28,10 @@ import { pathToFileURL } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { format } from 'node:util';
 import {runNativeChat,receiveBridge} from './chat_runtime.mjs';
+import PluginConnection from './plugin_connection.mjs';
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry';
+import TypertGateway from '@deepseek-ai/dsh-api-gateway';
+import * as ApiRemotes from '@deepseek-ai/dsh-api-remotes';
 const protocolWrite = process.stdout.write.bind(process.stdout);
 const PREFIX = 'MICRO_MULTI_CORDIS:';
 const write = value => {
@@ -53,6 +57,7 @@ registerHooks({resolve(specifier,context,nextResolve){
   if(packageRoots.has(specifier))return {url:packageRoots.get(specifier),shortCircuit:true};
   try{return nextResolve(specifier,context);}catch(error){
     if(available.has(specifier))return {url:available.get(specifier),shortCircuit:true};
+    try{return {url:pathToFileURL(runtimeRequire.resolve(specifier)).href,shortCircuit:true};}catch{}
     throw error;
   }
 }});
@@ -153,7 +158,7 @@ async function synchronize(plugins,allowPending=false){
    for(const entry of entries){
     if(entry.disabled)continue;
     const target=entry.name===item.packageName?packageEntry:(()=>{try{return require.resolve(entry.name);}catch{return runtimeRequire.resolve(entry.name);}})();
-    desired.get(id).push({entry:target,root:pluginRoot,config:entry.config??{},bundleId:id});
+    desired.get(id).push({entry:target,root:pluginRoot,config:item.configOverrides?.[entry.id]??entry.config??{},bundleId:id});
    }
    if(entries.some(entry=>entry.id==='web'))desired.get(id).push({entry:runtimeRequire.resolve('@deepseek-ai/dsh-tool-web'),root:pluginRoot,config:{searchTimeoutMs:60000,fetch:false},bundleId:id});
   }else desired.get(id).push(item);
@@ -198,6 +203,10 @@ async function handle(request){
   await root.plugin(SystemPrompt,{includeHarnessIdentity:false,includeRuntimeContext:false});
   await root.plugin(ToolRuntime,{mode:'native'});
   await root.plugin(WorkspaceService,{workspace:request.workspace,root:request.root});
+  await root.plugin(PluginConnection,{});
+  await root.plugin(TypertRegistry,{});
+  await root.plugin(TypertGateway,{});
+  await root.plugin(ApiRemotes,{});
   for(const [plugin,config] of [[AgentRegistry,{}],[SessionStore,{}],[LlmRuntime,{}],
     [SkillRegistry,{}],[ApprovalService,{policy:'ask'}],[SessionProjectionRegistry,{}],
     [JsonlSessionPersistence,{root:resolve(request.sessionRoot??request.workspace,"native-sessions"),compression:"none"}],
@@ -241,6 +250,40 @@ async function handle(request){
  if(request.action==='skills')return {skills:await root.skills.list({cwd:root.microMulti.workspace})};
  if(request.action==='chat-run')return await runNativeChat(root,request,write,nativeCalls);
  if(request.action==='schemas')return {tools:root.tools.schemas()};
+ if(request.action==='plugin-rpc')return {result:await root.connection.call(request.channel,request.method,request.payload)};
+ if(request.action==='plugin-rpc-stream'){
+  if(request.channel!=='/api')throw Error('Remote streams require the shared API channel');
+  const controller=new AbortController();nativeCalls.set(request.streamId??String(request.id),controller);
+  try{
+   const empty={async *[Symbol.asyncIterator](){}},stream=await root.typertGateway.wireStream.open(request.method,request.payload,empty,root.connection.operator,controller.signal);
+   for await(const value of stream)write({event:'plugin-stream-value',requestId:request.id,streamId:request.streamId,value});
+   return {complete:true};
+  }finally{nativeCalls.delete(request.streamId??String(request.id));}
+ }
+ if(request.action==='plugin-models'){
+  const providers=root.llm.listProviders();
+  return {providers,models:(await Promise.all(providers.map(async provider=>{
+   try{return await root.llm.listModels(provider.id);}catch{return [];}
+  }))).flat()};
+ }
+ if(request.action==='plugin-model-stream'){
+  const controller=new AbortController();nativeCalls.set(request.streamId??String(request.id),controller);
+  try{for await(const chunk of root.llm.stream({...request.options,signal:controller.signal}))write({event:'plugin-model-chunk',requestId:request.id,streamId:request.streamId,chunk});return {complete:true};}
+  finally{nativeCalls.delete(request.streamId??String(request.id));}
+ }
+ if(request.action==='bundle-config'){
+  const entries=[];
+  for(const [index,item] of request.plugins.entries()){
+   if(item.bundlePaths){
+    const patches=item.bundlePaths.flatMap(path=>loadOverlayPatches('Micro-Multi',path));
+    const base=patches.some(patch=>patch.id==='web')?[{id:'web',name:'@deepseek-ai/dsh-web',config:{}}]:[];
+    for(const entry of applyEntryPatches(base,patches,console.warn)){
+     if(!entry.disabled)entries.push({key:`${index}:${entry.id}`,name:entry.name,config:item.configOverrides?.[entry.id]??entry.config??{}});
+    }
+   }else entries.push({key:String(index),name:item.entry,config:item.config??{}});
+  }
+  return {entries};
+ }
  if(request.action==='profile-schema'){
   if(!hostProfile)throw Error('No native profile selected');
   const layers=configLayers;
@@ -276,6 +319,7 @@ async function handle(request){
 }
 let queue=Promise.resolve(), barrier=Promise.resolve(), closing=false;
 const active=new Set(),queuedCalls=new Set(),cancelledCalls=new Set();
+const blockingActive=new Set();
 const executePacket=async request=>{
  try{
   if(request.action==='call'&&cancelledCalls.has(String(request.id)))throw Error('Native call cancelled before dispatch');
@@ -293,17 +337,19 @@ input.on('line',line=>{
   nativeApprovals.get(packet.approvalId)?.(['allowed-once','rejected','cancelled','unavailable'].includes(packet.outcome)?packet.outcome:'unavailable');return;
  }
  if(packet.action==='cancel-call'){if(queuedCalls.has(String(packet.id)))cancelledCalls.add(String(packet.id));nativeCalls.get(String(packet.id))?.abort();return;}
+ if(packet.action==='dispose')for(const controller of nativeCalls.values())controller.abort();
  if(packet.action==='call')queuedCalls.add(String(packet.id));
  queue=queue.then(async()=>{
   await barrier;
-  let parallel=false;
+  let parallel=['plugin-rpc','plugin-rpc-stream','plugin-model-stream'].includes(packet.action);
   if(packet.action==='call'&&root){
    try{parallel=root.tools.executionMode({callId:String(packet.id),name:packet.name,arguments:packet.arguments??{},signal:AbortSignal.timeout(1000)}).kind==='parallel';}catch{}
   }
-  const ready=parallel?barrier:Promise.all([...active,barrier]);
+  const ready=parallel?barrier:Promise.all([...blockingActive,barrier]);
   const operation=ready.then(()=>executePacket(packet));active.add(operation);
   if(!parallel)barrier=operation;
-  operation.finally(()=>active.delete(operation));
+  if(!['plugin-rpc-stream','plugin-model-stream'].includes(packet.action))blockingActive.add(operation);
+  operation.finally(()=>{active.delete(operation);blockingActive.delete(operation);});
  });
 });
 input.on('close',()=>{closing=true;for(const controller of nativeCalls.values())controller.abort();queue.finally(async()=>{await Promise.all([...active]);await dispose();process.exit(0);});});

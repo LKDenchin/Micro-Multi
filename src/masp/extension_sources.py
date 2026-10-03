@@ -14,7 +14,7 @@ from masp.native_process import native_creation_flags
 
 def remote_source(source: str) -> bool:
     return source.startswith(("npm:", "git+https://")) or (
-        source.startswith("https://") and source.endswith(".git")
+        source.startswith("https://") and source.split("#", 1)[0].endswith(".git")
     )
 
 
@@ -84,7 +84,6 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
                 or parsed.username
                 or parsed.password
                 or parsed.query
-                or parsed.fragment
             ):
                 raise ValueError(
                     "Git bundle requires an HTTPS repository URL without embedded credentials"
@@ -93,7 +92,18 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
             if not git:
                 raise ValueError("git is required to acquire this bundle")
             root = stage / "repository"
-            run([git, "clone", "--depth", "1", "--", url, str(root)], stage)
+            subpath = parsed.fragment
+            if subpath and (
+                not re.fullmatch(r"[a-zA-Z0-9_./-]+", subpath)
+                or any(part in {"", ".", ".."} for part in subpath.split("/"))
+            ):
+                raise ValueError("Invalid Git bundle subdirectory")
+            run([git, "clone", "--depth", "1", "--", url.split("#", 1)[0], str(root)], stage)
+            if subpath:
+                repository = root.resolve()
+                root = (root / subpath).resolve()
+                if not root.is_relative_to(repository) or not root.is_dir():
+                    raise ValueError("Git bundle subdirectory does not exist")
             if (root / "package.json").is_file():
                 manager, executable = package_manager(root)
                 if manager == "pnpm":
