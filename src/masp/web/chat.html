@@ -5,8 +5,8 @@
   <meta name="theme-color" content="#0d0d0d"><title>Micro-Multi</title>
   <link rel="icon" type="image/svg+xml" href="/static/micro-multi.svg">
   <link rel="apple-touch-icon" href="/static/micro-multi.png">
-  <link rel="stylesheet" href="/static/chat.css?v=44">
-  <script type="module" src="/static/chat.js?v=45"></script>
+  <link rel="stylesheet" href="/static/chat.css?v=48">
+  <script type="module" src="/static/chat.js?v=48"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -207,7 +207,7 @@
             </section>
 
             <section data-settings-page="extensions" hidden>
-              <h2>插件与扩展</h2>
+              <header class="settings-extensions-header"><h2>插件与扩展</h2><div class="settings-extension-toolbar"><input id="settings-extension-search" type="search" placeholder="搜索应用、技能和 MCP" aria-label="搜索扩展"><button id="settings-browse-market" type="button">浏览目录</button></div></header>
               <h3 class="settings-group-title">加载与管理</h3>
               <div class="settings-group-card">
                 <div class="setting-row setting-row-stack">
@@ -218,33 +218,9 @@
                   </div>
                   <p id="settings-install-plugin-feedback" class="feedback" role="status"></p>
                 </div>
-                <div class="setting-row">
-                  <div class="setting-info"><strong>扩展管理面板</strong><small>在侧边栏查看或配置插件、技能与 MCP 服务</small></div>
-                  <div class="setting-control setting-control-inline">
-                    <button type="button" id="settings-open-plugins">插件面板</button>
-                    <button type="button" id="settings-open-extensions">技能面板</button>
-                    <button type="button" id="settings-open-mcp">MCP 面板</button>
-                  </div>
-                </div>
               </div>
-              <h3 class="settings-group-title">已加载组件</h3>
               <div class="settings-group-card">
                 <div id="settings-plugin-inventory" class="settings-embedded-list"></div>
-                <details id="native-profile-panel" class="plugin-component-details">
-                  <summary>原生配置与 Profile</summary>
-                  <div class="setting-row-stack">
-                    <label for="native-profile-name">Profile 名称</label>
-                    <input id="native-profile-name" value="default" list="native-profile-names" autocomplete="off">
-                    <datalist id="native-profile-names"></datalist>
-                    <label for="native-profile-config">Cordis 配置</label>
-                    <textarea id="native-profile-config" rows="8" spellcheck="false">[]</textarea>
-                    <label for="native-profile-patch">配置覆盖</label>
-                    <textarea id="native-profile-patch" rows="5" spellcheck="false">[]</textarea>
-                    <div class="row-actions"><button type="button" id="native-profile-load">读取配置</button><button type="button" id="native-profile-save">保存并启用</button></div>
-                    <details><summary>插件设置表单</summary><button type="button" id="native-profile-form-load">读取插件设置</button><div id="native-profile-form"></div><button type="button" id="native-profile-form-save" hidden>保存插件设置</button></details>
-                    <p id="native-profile-feedback" class="feedback" role="status"></p>
-                  </div>
-                </details>
               </div>
             </section>
 
@@ -380,10 +356,13 @@
           </div>
         </div>
         <form id="composer">
+          <div id="composer-add-menu" class="composer-add-menu" hidden></div>
           <textarea id="prompt" rows="2" placeholder="随心输入"></textarea>
           <div id="attachment-list" aria-live="polite"></div>
+          <div id="plugin-composer-dock" class="plugin-slot-host"></div>
           <div class="composer-bottom">
             <div class="composer-left">
+              <div id="plugin-composer-left" class="plugin-slot-host"></div>
               <button type="button" id="composer-project" title="添加附件" aria-label="添加附件"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
               <input id="attachment-input" type="file" multiple hidden accept="*/*">
               <div class="permission-select">
@@ -403,6 +382,7 @@
               <label class="composer-select project-select-hidden"><select id="project-select" aria-label="项目"><option value="">通用对话</option></select></label>
             </div>
             <div class="composer-right">
+              <div id="plugin-composer-right" class="plugin-slot-host"></div>
               <label class="composer-select model-select"><select id="chat-model-select" aria-label="对话模型"><option value="">配置模型</option></select></label>
               <label class="composer-select agent-select" id="agent-select-wrap"><select id="agent-select" aria-label="对话模式"><option value="">多agent协作</option><option value="main_only">仅主agent</option></select></label>
               <div class="context-usage-widget" id="context-usage-widget">
@@ -459,6 +439,7 @@
           <div id="workspace-breadcrumbs"></div>
           <div class="workspace-inline-actions">
             <span id="workspace-file-actions" hidden>
+              <select id="workspace-open-with" aria-label="打开方式"><option value="">打开方式…</option><option value="explorer">在资源管理器中显示</option><option value="default">默认应用</option></select>
               <button type="button" id="workspace-review-current-file">审查此文件</button>
             </span>
           </div>
@@ -537,6 +518,10 @@
       <div id="skills-panel" class="inspector-panel" hidden><div class="panel-help">自动发现工作区中的 SKILL.md，也可手动添加全局技能。</div><div id="skill-list"></div><form id="skill-form"><h3>添加技能</h3><label>技能标识<input name="name" required pattern="[a-z][a-z0-9_-]*" placeholder="例如：review-guidelines"></label><label>技能内容<textarea name="content" rows="8" required placeholder="# 技能名称&#10;描述触发场景与执行步骤"></textarea></label><button class="primary wide" type="submit">保存技能</button></form><p id="skill-feedback" class="feedback" role="status"></p></div>
       <div id="mcp-panel" class="inspector-panel" hidden><div class="panel-help">管理内置工作区 MCP 服务与外部 MCP 服务，点击检测工具可验证连接。</div><div id="mcp-list"></div><form id="mcp-form"><h3>添加外部 MCP 服务</h3><label>名称<input name="name" required placeholder="例如：文件检索"></label><label>连接方式<select name="transport" id="mcp-transport"><option value="stdio">本地进程</option><option value="http">远程 HTTP</option></select></label><label id="mcp-command-field">可执行命令<input name="command" placeholder="例如：python"></label><label id="mcp-url-field" hidden>HTTP 地址<input name="url" type="url" placeholder="https://mcp.example.com/mcp"></label><label>命令参数<textarea name="args" rows="3" placeholder="每行填写一个参数"></textarea></label><label>MCP 工作目录<input name="cwd" placeholder="可选，本地服务的工作目录"></label><label>MCP 环境变量 · JSON<textarea name="env" rows="2" placeholder='{"KEY":"value"}'></textarea></label><label>HTTP 请求头 · JSON<textarea name="headers" rows="2" placeholder='{"Authorization":"Bearer token"}'></textarea></label><label class="check-row"><input name="enabled" type="checkbox" checked> 启用服务</label><button class="primary wide" type="submit">保存服务</button></form><p id="mcp-feedback" class="feedback" role="status"></p></div>
       <div id="plugins-panel" class="inspector-panel" hidden>
+        <div class="custom-market-heading"><h2>插件</h2><input id="market-search" type="search" placeholder="搜索插件、技能和 MCP"><button id="market-refresh" type="button">刷新</button><button id="market-add" type="button">＋ 添加</button></div>
+        <div class="custom-market-tabs"><button id="market-installed" type="button">已安装</button><button id="market-discover" type="button">浏览目录</button></div>
+        <div id="market-category-bar" hidden><div id="market-categories" role="group" aria-label="插件分类"></div><label class="market-sort-label">排序<select id="market-sort"><option value="stars">热门</option><option value="downloads">下载量</option><option value="name">名称</option></select></label></div>
+        <div id="market-results" hidden></div>
         <div class="panel-help">管理内置插件、已安装扩展包、MCP 服务与技能。</div>
         <div class="plugin-filter-tabs" role="tablist">
           <button type="button" data-plugin-tab="all" class="selected">全部</button>
@@ -550,7 +535,7 @@
             <input id="dsh-plugin-path" placeholder="输入本地插件目录或配置文件路径">
             <button type="button" id="dsh-plugin-install-btn" class="primary">加载</button>
           </div>
-          <p class="panel-help">支持本地 JSON 工具、MCP、Skill 和原生 Cordis Host 插件；Client 界面插件暂不支持。</p>
+          <p class="panel-help">支持本地 JSON 工具、MCP、Skill 和原生 Cordis Host 插件；安装后在本程序的聊天中调用。</p>
           <p id="dsh-plugin-install-feedback" class="feedback" role="status"></p>
         </div>
         <div id="dsh-plugin-overview"></div>
@@ -572,12 +557,24 @@
     </aside>
   </div>
   <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="conversation-rename-dialog"><form method="dialog"><h2>编辑对话名称</h2><input id="conversation-rename-input" maxlength="120" required aria-label="对话名称"><div class="row-actions"><button value="cancel" formnovalidate>取消</button><button value="save" class="primary">保存</button></div></form></dialog>
+  <section id="customization-page" class="customization-page" hidden aria-label="自定义插件与技能">
+    <nav class="customization-nav"><div class="customization-nav-head"><h2>自定义</h2><button id="customization-close" type="button" aria-label="返回对话">×</button></div><button type="button" data-customization-panel="plugins" class="selected">插件</button><button type="button" data-customization-panel="skills">技能</button><button type="button" data-customization-panel="mcp">MCP 服务</button><h3>已安装</h3><div id="customization-installed"></div></nav>
+    <main id="customization-content" class="customization-content"></main>
+  </section>
+  <div id="plugin-runtime-roots" hidden></div>
+  <div id="plugin-overlay-root" class="plugin-slot-host"></div>
+  <dialog id="extension-detail-dialog" class="extension-detail-dialog">
+    <header><h2 id="extension-detail-title"></h2><button id="extension-detail-close" type="button" aria-label="关闭插件详情">×</button></header>
+    <div id="extension-detail-body"></div><p id="extension-detail-status" role="status"></p>
+    <footer><button id="extension-detail-cancel" type="button">取消</button><button id="extension-detail-confirm" type="button" class="primary">确认安装</button></footer>
+  </dialog>
   <dialog id="search-dialog"><form method="dialog" class="search-dialog-form"><div class="search-dialog-head"><h2>全局搜索</h2><button type="button" id="search-close" aria-label="关闭">关闭</button></div><input id="conversation-search" type="search" placeholder="搜索项目、代码文件、聊天记录、插件或设置项"><div id="search-results" class="search-results"></div></form></dialog>
   <dialog id="team-review-dialog" class="team-review-dialog">
     <div class="team-review-head">
       <div>
-        <h2>首轮多智能体协作分工确认</h2>
-        <p>此团队分工仅在当前对话内生效。确认后后续多轮对话将由主 Agent 自动按职责分配，也可在底部选择器中指定特定子 Agent 或仅用主 Agent。</p>
+        <h2>本轮团队协作审核</h2>
+        <p>每次新任务或反馈均重新提交方案。可编辑任务、负责人、提示词和模型；确认当前版本后才启动子 Agent。</p>
       </div>
       <div class="workflow-modal-controls">
         <button type="button" id="modal-workflow-zoom-out" title="缩小">－</button>

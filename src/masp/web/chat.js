@@ -43,6 +43,9 @@ let userAbortedCurrentTurn = false;
 installSelectMenus();
 
 const settingsPanels = ['team', 'models', 'skills', 'mcp', 'plugins', 'runs'];
+document.querySelectorAll('[data-rail="runs"]').forEach(button => button.remove());
+document.querySelectorAll('[data-rail="skills"], [data-rail="mcp"]').forEach(button => button.hidden = true);
+document.querySelector('[data-rail="plugins"]')?.setAttribute('title', '自定义');
 const settingsContent = $('#left-tool-content');
 settingsContent.append(...settingsPanels.map((name) => $('#' + name + '-panel')));
 if (window.maspDesktop?.isDesktop) {
@@ -368,6 +371,7 @@ function createOrUpdatePlanApprovalCard(cardEl, teamData) {
     container.className = 'plan-approval-card';
   }
   const planVer = Number(teamData.plan_version || teamData.version || 1);
+  container.dataset.teamVersion = String(teamData.version || 1);
   const wfState = String(teamData.workflow_state || (teamData.status === 'approved' ? 'approved' : 'planned'));
   const isApproved = teamData.status === 'approved' || wfState === 'approved' || wfState === 'running' || wfState === 'done';
   const riskLv = String(teamData.risk_level || 'medium');
@@ -394,6 +398,7 @@ function createOrUpdatePlanApprovalCard(cardEl, teamData) {
       '</span>' +
     '</div>' +
     '<div class="plan-agents-grid">' + agentsRows + '</div>' +
+    ((teamData.plan_documents || []).length ? '<div class="plan-document-links">' + teamData.plan_documents.map(path => '<button type="button" data-team-document="' + escapeHtml(path) + '">' + escapeHtml(path.split('/').pop()) + '</button>').join('') + '</div>' : '') +
     '<div class="plan-approval-actions">' +
       (isApproved
         ? '<button type="button" class="plan-btn secondary" data-inline-open-mindmap="true">查看团队</button>'
@@ -713,6 +718,16 @@ function renderMessage(role, content, extra = '', toolEvents = [], options = {})
   }
 
   const turn = item.querySelector('.assistant-turn');
+  for (const segment of options.segments || []) {
+    if (segment.type === 'team_plan') {
+      const card = createOrUpdatePlanApprovalCard(null, segment.team);
+      if (card) {
+        card.dataset.teamVersion = String(segment.team.version);
+        if (team && segment.team.version !== team.version) card.querySelector('[data-inline-approve-plan]')?.setAttribute('disabled', '');
+        turn.append(card);
+      }
+    }
+  }
   if (options.thinking && (options.thinking.content || options.thinking.duration_ms)) {
     const thinkEl = createOrUpdateThinkingGroup(null, options.thinking);
     if (thinkEl) turn.append(thinkEl);
@@ -802,7 +817,7 @@ function renderAgentSelector() {
 function welcome() {
   const project = projects.find((item) => item.id === draftProjectId);
   const modeHint = project
-    ? '当前已绑定项目 <strong>' + escapeHtml(project.name) + '</strong>，主 Agent 会按任务需要自主创建、调整和并行调度子 Agent；普通问答直接回答。'
+    ? '当前已绑定项目 <strong>' + escapeHtml(project.name) + '</strong>，主 Agent 会先分析并提交本轮团队方案，审核后才启动子 Agent；普通问答直接回答。'
     : '当前为独立新聊天，在下方选项卡选择项目文件夹即可启用 Git 分支与多 Agent 协作。';
   thread.innerHTML = '<div class="welcome"><div class="logo" aria-hidden="true"><img src="/static/micro-multi.svg" alt=""></div><h1>我们从哪里开始？</h1><p>' + modeHint + '</p><div class="suggestions"><button type="button">帮我分析当前工作区结构</button><button type="button">列出当前已加载的所有插件与 MCP 工具</button><button type="button">为我的需求规划实现方案</button></div></div>';
   updateHeader();
@@ -827,7 +842,7 @@ function updateHeader() {
 }
 
 function renderConversationList() {
-  const visible = conversations.filter((item) => !item.deleted_at && !isSpuriousConvItem(item));
+  const visible = conversations.filter((item) => !item.deleted_at && !isSpuriousConvItem(item)).sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
   $('#conversations').innerHTML = visible.map((item) => {
     const proj = item.project_id ? projects.find((p) => p.id === item.project_id) : null;
     const badge = proj ? '<span class="conv-project-tag">' + escapeHtml(proj.name) + '</span>' : '';
@@ -847,16 +862,22 @@ function renderProjectList() {
   $('#projects').innerHTML = projects.map((project) => {
     const children = conversations
       .filter((item) => item.project_id === project.id && !item.deleted_at && !isSpuriousConvItem(item))
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)))
       .map((item) =>
         '<div class="project-conversation ' + (item.id === conversationId ? 'active' : '') + '">' +
         '<button class="conversation" data-id="' + escapeHtml(item.id) + '" title="' + escapeHtml(item.title) + '">' +
-        escapeHtml(item.title) + '</button></div>'
+        (item.pinned ? '📌 ' : '') + escapeHtml(item.title) + '</button>' +
+        '<details class="conversation-actions"><summary aria-label="对话操作">⋯</summary><div>' +
+        '<button data-conversation-action="rename" data-conversation-id="' + escapeHtml(item.id) + '">编辑名称</button>' +
+        '<button data-conversation-action="pin" data-conversation-id="' + escapeHtml(item.id) + '">' + (item.pinned ? '取消置顶' : '置顶') + '</button>' +
+        '<button data-conversation-action="delete" data-conversation-id="' + escapeHtml(item.id) + '">删除</button></div></details></div>'
       ).join('');
-    return '<div class="project-group"><div class="project-row"><button class="project-link ' +
-      (project.id === activeProjId ? 'active' : '') +
+    const collapsed = localStorage.getItem('masp.project.collapsed.' + project.id) === 'true';
+    return '<div class="project-group"><div class="project-row"><button class="project-collapse" data-project-collapse="' + escapeHtml(project.id) + '" aria-expanded="' + !collapsed + '" aria-label="折叠或展开项目">' + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>' + '</button><button class="project-link ' +
+      (project.id === activeProjId && !conversationId ? 'active' : '') +
       '" data-project="' + escapeHtml(project.id) + '">' + icon('folder') + '<span>' + escapeHtml(project.name) + '</span></button>' +
       '<button class="project-delete" data-project-delete="' + escapeHtml(project.id) + '" title="移除项目" aria-label="移除项目：' + escapeHtml(project.name) + '">' + icon('trash') + '</button></div>' +
-      (children ? '<div class="project-conversations">' + children + '</div>' : '') + '</div>';
+      (children && !collapsed ? '<div class="project-conversations">' + children + '</div>' : '') + '</div>';
   }).join('') || '<p class="empty">暂未添加项目文件夹。</p>';
 }
 
@@ -1379,6 +1400,8 @@ function showWorkspacePanel(name, refresh = true, turnMsgId = null) {
 }
 
 function showLeftTool(name) {
+  if (['plugins', 'skills', 'mcp'].includes(name)) return openCustomizationPage(name);
+  closeCustomizationPage();
   document.body.classList.add('sidebar-tools-mode');
   document.body.classList.remove('sidebar-closed');
   const repository = name === 'repository';
@@ -1397,6 +1420,71 @@ function showLeftTool(name) {
   if (name === 'plugins') loadPlugins();
   if (name === 'runs') loadRuns();
 }
+
+const customizationPanelHomes = new Map();
+let customizationSection = 'plugins';
+const customizationSearchIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>';
+const attachmentMenuIcon = '<svg class="composer-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 8v9a4 4 0 0 0 8 0V6a3 3 0 0 0-6 0v10a2 2 0 0 0 4 0V8"/></svg>';
+$('#customization-close').id = 'customization-search-toggle';
+$('#customization-search-toggle').innerHTML = customizationSearchIcon;
+$('#customization-search-toggle').setAttribute('aria-label', '搜索自定义');
+$('#customization-search-toggle').title = '搜索';
+for (const [name, title] of [['skills', '技能'], ['mcp', 'MCP 服务']]) {
+  const toolbar = document.createElement('div'); toolbar.className = 'custom-section-heading';
+  toolbar.innerHTML = '<h2>' + title + '</h2><input type="search" id="custom-' + name + '-search" placeholder="搜索' + title + '" aria-label="搜索' + title + '">';
+  $('#' + name + '-panel').prepend(toolbar);
+  toolbar.querySelector('input').addEventListener('input', event => {
+    const query = event.target.value.trim().toLocaleLowerCase();
+    $('#' + (name === 'skills' ? 'skill' : 'mcp') + '-list').querySelectorAll('.model-card').forEach(card => card.hidden = !card.textContent.toLocaleLowerCase().includes(query));
+  });
+}
+function closeCustomizationPage() {
+  $('#customization-page').hidden = true;
+  document.body.classList.remove('customization-open');
+  for (const [panel, home] of customizationPanelHomes) { home.append(panel); panel.hidden = true; }
+}
+async function openCustomizationPage(name = 'plugins') {
+  customizationSection = name;
+  closeSettingsPage();
+  document.body.classList.remove('sidebar-tools-mode');
+  document.body.classList.add('customization-open');
+  $('#customization-page').hidden = false;
+  for (const key of ['plugins', 'skills', 'mcp']) {
+    const panel = $('#' + key + '-panel');
+    if (!customizationPanelHomes.has(panel)) customizationPanelHomes.set(panel, panel.parentElement);
+    $('#customization-content').append(panel);
+    panel.hidden = key !== name;
+  }
+  document.querySelectorAll('[data-customization-panel]').forEach(button => button.classList.toggle('selected', button.dataset.customizationPanel === name));
+  document.querySelectorAll('[data-rail]').forEach(button => button.classList.toggle('rail-active', button.dataset.rail === 'plugins'));
+  if (name === 'plugins') { await loadPlugins(); await loadMarket(); }
+  if (name === 'skills') await loadSkills();
+  if (name === 'mcp') await loadMcpServers();
+  try {
+    const data = await api('/dsh/plugins' + (currentProjectId() ? '?project_id=' + encodeURIComponent(currentProjectId()) : ''));
+    $('#customization-installed').innerHTML = (data.installed || []).map(item => '<button type="button" data-customization-installed="' + escapeHtml(item.id) + '">' + escapeHtml(item.name) + '</button>').join('') || '<p>尚未安装插件</p>';
+  } catch (error) { $('#customization-installed').textContent = error.message; }
+}
+$('#customization-search-toggle').addEventListener('click', () => {
+  const input = $(customizationSection === 'plugins' ? '#market-search' : '#custom-' + customizationSection + '-search');
+  input?.focus(); input?.select();
+});
+$('#settings-browse-market').addEventListener('click', () => openCustomizationPage('plugins'));
+$('#settings-extension-search').addEventListener('input', event => {
+  const query = event.target.value.trim().toLocaleLowerCase();
+  $('#settings-plugin-inventory').querySelectorAll('.dsh-plugin-card').forEach(card => card.hidden = !card.textContent.toLocaleLowerCase().includes(query));
+});
+const settingsExtensionPage = document.querySelector('[data-settings-page="extensions"]');
+const settingsInventoryGroup = $('#settings-plugin-inventory').closest('.settings-group-card');
+settingsExtensionPage.insertBefore(settingsInventoryGroup, settingsExtensionPage.querySelector('.settings-group-title'));
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#customization-page').hidden) closeCustomizationPage(); });
+document.querySelectorAll('[data-customization-panel]').forEach(button => button.addEventListener('click', () => openCustomizationPage(button.dataset.customizationPanel)));
+$('#customization-installed').addEventListener('click', async event => {
+  const button = event.target.closest('[data-customization-installed]');
+  if (!button) return;
+  await openCustomizationPage('plugins');
+  openInstalledDetail(button.dataset.customizationInstalled);
+});
 
 let activeSettingsSection = 'general';
 
@@ -2087,6 +2175,7 @@ function agentCard(agent) {
     '<label>标识<input class="agent-id" value="' + escapeHtml(agent.id) + '" required pattern="[a-z][a-z0-9_-]*"></label>' +
     '<label>名称<input class="agent-name" value="' + escapeHtml(agent.name) + '" required></label>' +
     '<label>职责<textarea class="agent-responsibility" rows="2" required>' + escapeHtml(agent.responsibility) + '</textarea></label>' +
+    '<label>提示词<textarea class="agent-system-prompt" rows="3">' + escapeHtml(agent.system_prompt || '') + '</textarea></label>' +
     '<label>模型<select class="agent-profile">' + options + '</select></label>' +
     '<label>负责路径<input class="agent-paths" value="' + escapeHtml((agent.owned_paths || []).join(', ')) + '" placeholder="逗号分隔，可留空"></label>' +
     '<label class="check-row"><input class="agent-locked" type="checkbox"' + (agent.locked ? ' checked' : '') + '>重新规划时保留此 Agent</label></article>';
@@ -2102,6 +2191,7 @@ function modalAgentCard(agent, index) {
     '<div class="agent-heading"><strong>子 Agent #' + (index + 1) + '</strong><button type="button" data-modal-remove-agent="' + index + '">移除</button></div>' +
     '<label>名称<input class="modal-agent-name" value="' + escapeHtml(agent.name) + '"></label>' +
     '<label>职责分工<textarea class="modal-agent-responsibility" rows="2">' + escapeHtml(agent.responsibility) + '</textarea></label>' +
+    '<label>提示词<textarea class="modal-agent-system-prompt" rows="3">' + escapeHtml(agent.system_prompt || '') + '</textarea></label>' +
     '<label>绑定模型<select class="modal-agent-profile">' + options + '</select></label>' +
     '<label>负责路径<input class="modal-agent-paths" value="' + escapeHtml((agent.owned_paths || []).join(', ')) + '" placeholder="逗号分隔"></label>' +
     '</article>';
@@ -2379,6 +2469,7 @@ function syncModalEditorToTeam() {
       id: existing.id || ('agent_' + (idx + 1)),
       name: card.querySelector('.modal-agent-name').value.trim() || ('子 Agent ' + (idx + 1)),
       responsibility: card.querySelector('.modal-agent-responsibility').value.trim() || '负责模块实现与测试',
+      system_prompt: card.querySelector('.modal-agent-system-prompt').value,
       model_profile_id: card.querySelector('.modal-agent-profile').value || '',
       owned_paths: card.querySelector('.modal-agent-paths').value.split(',').map((s) => s.trim()).filter(Boolean),
       locked: Boolean(existing.locked),
@@ -2499,6 +2590,7 @@ let activeTurnSequence = 0;
 let activeTurnStartedAt = 0;
 
 async function confirmAndStartTeamExecution() {
+  const versionBeforeEdit = team?.version;
   const projectId = currentProjectId();
   if (!projectId) throw new Error('请先选择或创建项目');
   if (!conversationId) {
@@ -2511,11 +2603,13 @@ async function confirmAndStartTeamExecution() {
   if (team.status !== 'approved') {
     team = await api('/projects/' + encodeURIComponent(projectId) + '/team/approve', 'POST', {
       conversation_id: conversationId || null,
+      version: team.version,
     });
   }
   renderTeam();
   document.querySelectorAll('.plan-approval-card').forEach((card) => {
-    createOrUpdatePlanApprovalCard(card, team);
+    if (Number(card.dataset.teamVersion) === Number(versionBeforeEdit)) createOrUpdatePlanApprovalCard(card, team);
+    else card.querySelector('[data-inline-approve-plan]')?.setAttribute('disabled', '');
   });
   if ($('#team-review-dialog')?.open) {
     $('#team-review-dialog').classList.remove('workflow-fullscreen');
@@ -2580,6 +2674,7 @@ function collectTeam() {
     id: card.querySelector('.agent-id').value.trim(),
     name: card.querySelector('.agent-name').value.trim(),
     responsibility: card.querySelector('.agent-responsibility').value.trim(),
+    system_prompt: card.querySelector('.agent-system-prompt').value,
     model_profile_id: card.querySelector('.agent-profile').value,
     owned_paths: card.querySelector('.agent-paths').value.split(',').map((v) => v.trim()).filter(Boolean),
     locked: card.querySelector('.agent-locked').checked,
@@ -2621,7 +2716,7 @@ async function loadSkills() {
     const skills = await api('/skills' + (projectId ? '?project_id=' + encodeURIComponent(projectId) : ''));
     $('#skill-list').innerHTML = skills.map((skill) =>
       '<div class="model-card"><strong>' + escapeHtml(skill.name) + '</strong><small>' +
-      escapeHtml(skill.scope + ' · ' + skill.description) + '</small></div>'
+      escapeHtml(skill.scope) + '</small><details class="skill-description"><summary><span>' + escapeHtml(skill.description) + '</span></summary></details></div>'
     ).join('') || '<p class="empty">当前没有技能。可在项目内添加 .agents/skills/名称/SKILL.md，或使用下方表单。</p>';
   } catch (error) { setFeedback('#skill-feedback', error.message, true); }
 }
@@ -2682,11 +2777,9 @@ function renderDshPluginInventory() {
       '<span class="dsh-plugin-badge ' + (isOfficial ? 'official' : '') + '">' + escapeHtml(badgeText) + '</span></div>' +
       '<small>' + escapeHtml(item.description || '') + '</small>' +
       (comps ? '<details class="plugin-component-details" data-plugin-fold="' + escapeHtml(item.id) + '"><summary>' + translateUiText('组件') + ' (' + (item.components || []).length + ')</summary><div class="dsh-components">' + comps + '</div></details>' : '') +
-      (item.runtime === 'native-cordis-host' ? '<small class="native-runtime-label">原生 Cordis Host · 4.0.4</small>' : '') +
       '<div class="row-actions">' +
-        probeBtn +
-        '<button type="button" data-dsh-toggle="' + escapeHtml(item.id) + '" data-dsh-enabled="' + (!item.enabled) + '">' +
-        (item.enabled ? '已启用 · 点击停用' : '已停用 · 点击启用') + '</button>' +
+        '<button type="button" data-extension-detail="' + escapeHtml(item.id) + '">详情与配置</button>' + probeBtn +
+        ('<button type="button" role="switch" aria-checked="' + Boolean(item.enabled) + '" class="extension-switch" data-dsh-toggle="' + escapeHtml(item.id) + '" data-dsh-enabled="' + (!item.enabled) + '" aria-label="' + escapeHtml(item.name) + '">' + (item.enabled ? '已启用' : '已停用') + '</button>') +
         deleteBtn +
       '</div>' +
       (item.server_id ? '<p class="feedback plugin-card-feedback" data-dsh-probe-result="' + escapeHtml(item.server_id) + '" role="status"></p>' : '') +
@@ -2698,7 +2791,7 @@ function renderDshPluginInventory() {
     html += official.map((item) => renderCard(item, '内置功能', true)).join('');
   }
   if (activePluginTab === 'all' || activePluginTab === 'installed') {
-    html += installed.map((item) => renderCard(item, item.kind || '已安装扩展', false)).join('');
+    html += installed.map((item) => renderCard(item, item.kind === 'json-tool' ? '工具插件' : '已安装扩展', false)).join('');
   }
   if (activePluginTab === 'all' || activePluginTab === 'mcp') {
     html += mcpList.filter((m) => !m.builtin).map((m) =>
@@ -2720,7 +2813,7 @@ function renderDshPluginInventory() {
   if ($('#settings-plugin-inventory')) {
     const allCards = [
       ...official.map((item) => renderCard(item, '内置功能', true)),
-      ...installed.map((item) => renderCard(item, item.kind || '扩展插件', false)),
+      ...installed.map((item) => renderCard(item, item.kind === 'json-tool' ? '工具插件' : '已安装扩展', false)),
     ].join('');
     $('#settings-plugin-inventory').innerHTML = allCards || '<p class="empty">暂无已加载插件。</p>';
   }
@@ -3355,6 +3448,7 @@ async function send(content, attachments = [], options = {}) {
         auto_compact: contextAutoCompact,
         autonomous_hours: Number($('#dsh-autonomous-hours')?.value || 8),
         execute_team_now: Boolean(options.executeTeamNow),
+        team_version: options.executeTeamNow ? team?.version : null,
         execute_plan_now: Boolean(options.executePlanNow),
         plan_id: options.planId || null,
         main_only: $('#agent-select')?.value === 'main_only',
@@ -3437,6 +3531,10 @@ async function send(content, attachments = [], options = {}) {
         if (part.includes('event: team')) {
           team = parsed;
           renderTeam();
+          if (parsed.status === 'draft' && parsed.pending_tasks?.length) {
+            activePlanCardEl = createOrUpdatePlanApprovalCard(activePlanCardEl, parsed);
+            if (activePlanCardEl && !activePlanCardEl.parentElement && turnContainer) turnContainer.insertBefore(activePlanCardEl, currentBubble);
+          }
           continue;
         }
         if (part.includes('event: thinking')) {
@@ -3834,6 +3932,38 @@ $('#agent-select').addEventListener('change', () => {
   $('#prompt').placeholder = agent ? '指定给 ' + agent.name + ' 发送任务' : '随心输入 (主 Agent 自动统筹子 Agent)';
 });
 $('#projects').addEventListener('click', async (event) => {
+  const fold = event.target.closest('[data-project-collapse]');
+  if (fold) {
+    const key = 'masp.project.collapsed.' + fold.dataset.projectCollapse;
+    localStorage.setItem(key, String(localStorage.getItem(key) !== 'true'));
+    renderProjectList(); return;
+  }
+  const action = event.target.closest('[data-conversation-action]');
+  if (action) {
+    const id = action.dataset.conversationId;
+    const item = conversations.find(conv => conv.id === id);
+    if (!item) return;
+    try {
+      if (action.dataset.conversationAction === 'delete') {
+        if (busy) return toast('请等待当前回复完成后再删除对话。', true);
+        await api('/conversations/' + encodeURIComponent(id), 'DELETE', {});
+        lastDeletedConversation = id;
+        conversations = conversations.filter(conv => conv.id !== id);
+        if (conversationId === id) await startNewChat(draftProjectId);
+      } else {
+        const title = action.dataset.conversationAction === 'rename' ? await renameConversationTitle(item.title) : null;
+        if (action.dataset.conversationAction === 'rename' && !title?.trim()) return;
+        const updated = await api('/conversations/' + encodeURIComponent(id), 'PATCH', title === null ? { pinned: !item.pinned } : { title: title.trim() });
+        Object.assign(item, updated);
+      }
+      renderConversationList();
+      if (action.dataset.conversationAction === 'delete') {
+        toast('对话已删除');
+        $('#toast').insertAdjacentHTML('beforeend', '<button id="undo-delete">撤销删除</button>');
+      }
+    } catch (error) { toast(error.message, true); }
+    return;
+  }
   const conversationButton = event.target.closest('[data-id]');
   if (conversationButton) { await openConversation(conversationButton.dataset.id); return; }
   const deleteId = event.target.closest('[data-project-delete]')?.dataset.projectDelete;
@@ -3875,6 +4005,17 @@ $('#projects').addEventListener('click', async (event) => {
   await loadWorkspaceFiles('');
   if (!conversationId) welcome();
 });
+
+function renameConversationTitle(title) {
+  return new Promise(resolve => {
+    const dialog = $('#conversation-rename-dialog');
+    $('#conversation-rename-input').value = title;
+    dialog.returnValue = '';
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'save' ? $('#conversation-rename-input').value : ''), {once:true});
+    dialog.showModal();
+    $('#conversation-rename-input').select();
+  });
+}
 $('#toast').addEventListener('click', async (event) => {
   if (!event.target.closest('#undo-project-delete') || !lastDeletedProject) return;
   try {
@@ -3941,6 +4082,8 @@ $('#forward')?.addEventListener('click', async () => {
 thread.addEventListener('click', async (event) => {
   const approvePlanBtn = event.target.closest('[data-inline-approve-plan]');
   if (approvePlanBtn) {
+    const cardVersion = Number(approvePlanBtn.closest('.plan-approval-card')?.dataset.teamVersion);
+    if (cardVersion !== Number(team?.version)) return toast('此方案已被新版替代，请审核最新团队方案。', true);
     try {
       await confirmAndStartTeamExecution();
     } catch (error) {
@@ -4044,9 +4187,6 @@ $('#settings-search').addEventListener('input', () => {
   filterSettingsInPlace($('#settings-search').value);
 });
 $('#settings-open-models').addEventListener('click', () => { closeSettingsPage(); showLeftTool('models'); });
-$('#settings-open-extensions').addEventListener('click', () => { closeSettingsPage(); showLeftTool('skills'); });
-$('#settings-open-plugins')?.addEventListener('click', () => { closeSettingsPage(); showLeftTool('plugins'); });
-$('#settings-open-mcp')?.addEventListener('click', () => { closeSettingsPage(); showLeftTool('mcp'); });
 
 $('#access-select').addEventListener('change', () => {
   const prevAccess = lastTrackedLabels.access;
@@ -4395,9 +4535,203 @@ async function installPluginFromInput(inputSelector, feedbackSelector) {
   }
 }
 $('#dsh-plugin-install-btn')?.addEventListener('click', () => installPluginFromInput('#dsh-plugin-path', '#dsh-plugin-install-feedback'));
+const marketEntries = new Map();
+let extensionDetailAction = null;
+let extensionDetailEpoch = 0;
+function extensionDescription(item) {
+  return typeof item.description === 'object' ? (item.description?.zh || item.description?.['zh-CN'] || item.description?.en || '') : item.description || '';
+}
+function safeExtensionUrl(value) {
+  try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; }
+}
+function startExtensionDetail(title, confirmText) {
+  disposeExtensionSurface();
+  extensionDetailEpoch++;
+  extensionDetailAction = null;
+  $('#extension-detail-title').textContent = title;
+  $('#extension-detail-body').textContent = '正在读取…';
+  $('#extension-detail-status').textContent = '';
+  $('#extension-detail-confirm').textContent = confirmText;
+  $('#extension-detail-confirm').hidden = false;
+  $('#extension-detail-confirm').disabled = true;
+  if (!$('#extension-detail-dialog').open) $('#extension-detail-dialog').showModal();
+  return extensionDetailEpoch;
+}
+async function openMarketDetail(name) {
+  const epoch = startExtensionDetail('安装 ' + name + '？', '确认安装');
+  let item = marketEntries.get(name);
+  try {
+    if (!item) item = (await api('/dsh/market?q=' + encodeURIComponent(name))).plugins.find(value => value.name === name);
+    if (epoch !== extensionDetailEpoch) return;
+    if (!item) throw Error('插件已不在目录中，请刷新市场');
+    const description = extensionDescription(item);
+    const source = safeExtensionUrl(item.url);
+    const images = (item.screenshots || []).filter(value => {
+      const url = safeExtensionUrl(value);
+      return url && ['github.com', 'raw.githubusercontent.com', 'user-images.githubusercontent.com', 'private-user-images.githubusercontent.com', 'github-production-user-asset-6210df.s3.amazonaws.com'].includes(new URL(url).hostname);
+    });
+    $('#extension-detail-body').innerHTML = '<p class="extension-byline">' + escapeHtml(item.owner || '') + ' · ' + escapeHtml(item.version ? 'v' + item.version : '版本未提供') + ' · ★ ' + Number(item.stars || 0) + (item.downloads != null ? ' · ↓ ' + Number(item.downloads).toLocaleString() + ' / 近30天' : '') + (item.added ? ' · ' + escapeHtml(item.added) : '') + '</p>' +
+      '<p class="extension-description">' + escapeHtml(description) + '</p>' +
+      (images.length ? '<div class="extension-screenshots">' + images.map(url => '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(url) + '" alt="插件界面预览" loading="lazy" referrerpolicy="no-referrer"></a>').join('') + '</div>' : '') +
+      '<details class="extension-fold"><summary>它会做什么</summary><p>' + escapeHtml(description) + '</p><p>' + escapeHtml((item.capabilities || []).join('、') || '目录未提供能力扫描信息') + '</p>' + (source ? '<a href="' + escapeHtml(source) + '" target="_blank" rel="noopener noreferrer">查看项目说明和使用指令 ↗</a>' : '') + '</details>' +
+      '<details class="extension-fold"><summary>安装命令</summary><pre>' + escapeHtml(item.install || ('dsh plugin add ' + (item.npm || name))) + '</pre><p>在本程序点击确认后，使用本程序的安装目录和 Host 工具链。</p></details><p class="extension-note">构建脚本默认不运行。需要构建时，将在安装后单独显示构建审批。</p>';
+    $('#extension-detail-confirm').disabled = false;
+    extensionDetailAction = async () => {
+      const result = await api('/dsh/market/install', 'POST', {name});
+      if (result.status === 'build_required') {
+        $('#extension-detail-status').textContent = '插件需要构建，尚未启用。以下脚本需要单独批准：\n' + result.commands.map(command => command.argv.join(' ') + '\n' + JSON.stringify(command.scripts, null, 2)).join('\n');
+        $('#extension-detail-confirm').textContent = '批准构建并安装';
+        extensionDetailAction = async () => {
+          const installed = await api('/dsh/builds/' + encodeURIComponent(result.id) + '/decision', 'POST', {approved: true, revision: result.revision});
+          $('#extension-detail-status').textContent = '已成功加载插件：' + installed.name;
+          $('#extension-detail-confirm').hidden = true;
+          scheduleExtensionRefresh();
+        };
+      } else {
+        $('#extension-detail-status').textContent = '安装成功，已加入本程序的插件目录。';
+        $('#extension-detail-confirm').hidden = true;
+        document.querySelectorAll('[data-market-install]').forEach(button => { if (button.dataset.marketInstall === name) button.textContent = '查看'; });
+      }
+      scheduleExtensionRefresh();
+    };
+  } catch (error) { if (epoch === extensionDetailEpoch) $('#extension-detail-status').textContent = error.message; }
+}
+async function openInstalledDetail(id) {
+  const epoch = startExtensionDetail('插件详情与配置', '保存配置');
+  try {
+    const inventory = await api('/dsh/plugins');
+    if (epoch !== extensionDetailEpoch) return;
+    const item = [...inventory.official, ...inventory.installed, ...inventory.mcp_servers].find(value => value.id === id);
+    if (!item) throw Error('插件已移除，请刷新已安装列表');
+    $('#extension-detail-title').textContent = item.name;
+    $('#extension-detail-body').innerHTML = '<p class="extension-description">' + escapeHtml(extensionDescription(item)) + '</p><p class="extension-note">' + escapeHtml(item.runtime === 'native-cordis-host' ? '通过本程序 Cordis Host 加载' : item.kind || '已安装扩展') + '</p><div id="extension-config-fields"></div>';
+    const fields = $('#extension-config-fields');
+    let value, save;
+    if (item.kind === 'native-profile') {
+      const form = await api('/native-profiles/' + encodeURIComponent(item.profile_name) + '/form');
+      if (epoch !== extensionDetailEpoch) return;
+      const read = window.NativeProfileForm.render(fields, form);
+      save = () => api('/native-profiles/' + encodeURIComponent(item.profile_name) + '/form', 'PUT', {entries: read(), revision: form.revision});
+    } else if (item.runtime === 'native-cordis-host') {
+      const surface = await api('/dsh/plugins/' + encodeURIComponent(id) + '/surface');
+      if (epoch !== extensionDetailEpoch) return;
+      if (surface.available) {
+        $('#extension-detail-dialog').classList.add('has-plugin-surface');
+        $('#extension-detail-confirm').hidden = true;
+        fields.innerHTML = '<div class="plugin-surface-toolbar"><span>插件设置</span><button type="button" id="plugin-import-models">同步插件模型到对话</button></div><div id="plugin-client-root" class="plugin-client-root">正在加载插件页面…</div>';
+        const url = '/api/dsh/plugins/' + encodeURIComponent(id) + '/surface/';
+        const stylesheet = document.createElement('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = url + 'client.css'; document.head.append(stylesheet);
+        const client = await import(url + 'client.js?revision=' + encodeURIComponent(item.updated_at || ''));
+        if (epoch !== extensionDetailEpoch) { stylesheet.remove(); return; }
+        const dispose = await client.mount($('#plugin-client-root'), {rpcUrl: '/api/dsh/plugins/' + encodeURIComponent(id) + '/rpc', sessionId: conversationId});
+        extensionSurfaceDispose = () => { dispose(); stylesheet.remove(); };
+        $('#plugin-import-models').addEventListener('click', async event => {
+          event.currentTarget.disabled = true;
+          try {
+            const result = await api('/dsh/plugins/' + encodeURIComponent(id) + '/models/import', 'POST', {});
+            profiles = await api('/model-profiles'); renderSelectors(); renderTeam();
+            $('#extension-detail-status').textContent = result.models.length ? '已同步 ' + result.models.length + ' 个模型，可在对话中选择。' : '插件尚未提供模型。请先完成插件登录或配置，再同步。';
+          } catch (error) { $('#extension-detail-status').textContent = error.message; }
+          finally { event.currentTarget.disabled = false; }
+        });
+        return;
+      }
+      const form = await api('/dsh/plugins/' + encodeURIComponent(id) + '/configuration');
+      if (epoch !== extensionDetailEpoch) return;
+      if (!form.editable || !form.entries.length) { fields.textContent = form.message || '此插件没有可调整参数。'; $('#extension-detail-confirm').hidden = true; return; }
+      fields.innerHTML = form.entries.map((entry, index) => '<label class="extension-config-label">' + escapeHtml(entry.name) + '<textarea data-extension-config="' + index + '" rows="6" spellcheck="false">' + escapeHtml(JSON.stringify(entry.config, null, 2)) + '</textarea></label>').join('');
+      save = () => api('/dsh/plugins/' + encodeURIComponent(id) + '/configuration', 'PUT', {revision: form.revision, entries: form.entries.map((entry, index) => ({key: entry.key, config: JSON.parse(fields.querySelector('[data-extension-config="' + index + '"]').value)}))});
+    } else if (item.settings_key && item.config) {
+      value = item.config;
+      save = config => api('/dsh/settings', 'PUT', {[item.settings_key]: config});
+    } else {
+      const tool = inventory.tool_plugins.find(entry => entry.id === id);
+      const server = inventory.mcp_servers.find(entry => entry.id === id && !entry.builtin);
+      if (tool) { value = {name: tool.name, description: tool.description, command: tool.command, args: tool.args, parameters: tool.parameters, enabled: tool.configured_enabled ?? tool.enabled}; save = config => api('/plugins/' + encodeURIComponent(id), 'PUT', config); }
+      else if (server) { value = server; save = config => api('/mcp-servers/' + encodeURIComponent(id), 'PUT', config); }
+      else { fields.innerHTML = '<p>此扩展没有独立参数。可调用组件：</p><ul>' + (item.components || []).map(component => '<li>' + escapeHtml(component.type + '：' + component.name) + '</li>').join('') + '</ul>'; $('#extension-detail-confirm').hidden = true; return; }
+    }
+    if (value) fields.innerHTML = '<label class="extension-config-label">参数 · JSON<textarea id="extension-config-json" rows="12" spellcheck="false">' + escapeHtml(JSON.stringify(value, null, 2)) + '</textarea></label>';
+    extensionDetailAction = async () => {
+      await save(value ? JSON.parse($('#extension-config-json').value) : undefined);
+      $('#extension-detail-status').textContent = '配置已验证并保存，下次调用使用新参数。';
+      scheduleExtensionRefresh();
+    };
+    $('#extension-detail-confirm').disabled = false;
+  } catch (error) { if (epoch === extensionDetailEpoch) $('#extension-detail-status').textContent = error.message; }
+}
+let extensionSurfaceDispose = null;
+function disposeExtensionSurface() { try { extensionSurfaceDispose?.(); } finally { extensionSurfaceDispose = null; $('#extension-detail-dialog').classList.remove('has-plugin-surface'); } }
+function closeExtensionDetail() { extensionDetailEpoch++; extensionDetailAction = null; disposeExtensionSurface(); $('#extension-detail-dialog').close(); }
+$('#extension-detail-close').addEventListener('click', closeExtensionDetail);
+$('#extension-detail-cancel').addEventListener('click', closeExtensionDetail);
+$('#extension-detail-dialog').addEventListener('cancel', () => { extensionDetailEpoch++; extensionDetailAction = null; disposeExtensionSurface(); });
+$('#extension-detail-confirm').addEventListener('click', async () => {
+  const action = extensionDetailAction, epoch = extensionDetailEpoch;
+  if (!action) return;
+  $('#extension-detail-confirm').disabled = true;
+  $('#extension-detail-status').textContent = '正在处理…';
+  try { await action(); } catch (error) { if (epoch === extensionDetailEpoch) $('#extension-detail-status').textContent = error.message; }
+  finally { if (epoch === extensionDetailEpoch) $('#extension-detail-confirm').disabled = false; }
+});
+$('#market-add').addEventListener('click', () => { $('#market-installed').click(); $('#plugins-panel').classList.add('extension-adding'); $('#dsh-plugin-path').focus(); });
+let marketOffset = 0;
+let marketCategory = '';
+let marketCategories = {};
+let marketQueryTimer;
+let marketRequest = 0;
+async function loadMarket(append = false) {
+  $('#plugins-panel').classList.add('market-browsing');
+  $('#plugins-panel').classList.remove('extension-adding');
+  $('#market-category-bar').hidden = false;
+  $('#market-discover').classList.add('selected');
+  $('#market-installed').classList.remove('selected');
+  const request = ++marketRequest;
+  if (!append) marketOffset = 0;
+  $('#market-results').hidden = false;
+  if (!append) $('#market-results').textContent = '正在读取 dsh 市场…';
+  try {
+    const data = await api('/dsh/market?q=' + encodeURIComponent($('#market-search').value) + '&offset=' + marketOffset + '&category=' + encodeURIComponent(marketCategory) + '&sort=' + encodeURIComponent($('#market-sort').value));
+    if (request !== marketRequest) return;
+    data.plugins.forEach(item => marketEntries.set(item.name, item));
+    marketCategories = data.categories || {};
+    const categoryName = key => typeof marketCategories[key] === 'object' ? (marketCategories[key].zh || marketCategories[key]['zh-CN'] || marketCategories[key].en || key) : marketCategories[key] || key;
+    const categoryKeys = Object.keys(marketCategories);
+    const renderCategory = key => '<button type="button" data-market-category="' + escapeHtml(key) + '" class="' + (marketCategory === key ? 'selected' : '') + '">' + escapeHtml(categoryName(key)) + '</button>';
+    const topCategories = categoryKeys.slice(0, 8);
+    if (marketCategory && !topCategories.includes(marketCategory)) topCategories.push(marketCategory);
+    $('#market-categories').innerHTML = '<button type="button" data-market-category="" class="' + (!marketCategory ? 'selected' : '') + '">全部</button>' + topCategories.map(renderCategory).join('') + (categoryKeys.length > 8 ? '<details class="market-more-categories"><summary>更多分类 ⌄</summary><div>' + categoryKeys.filter(key => !topCategories.includes(key)).map(renderCategory).join('') + '</div></details>' : '');
+    const html = data.plugins.map(item => {
+      const category = Array.isArray(item.category) ? item.category[0] : item.category;
+      const url = safeExtensionUrl(item.url);
+      const shots = (item.screenshots || []).filter(value => { try { return ['github.com','raw.githubusercontent.com','user-images.githubusercontent.com'].includes(new URL(value).hostname) && new URL(value).protocol === 'https:'; } catch { return false; } }).slice(0,2);
+      return '<article class="market-card"><div class="market-card-head"><div class="market-card-title"><strong title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</strong><small>' + escapeHtml(item.owner || '') + (item.downloads != null ? ' · ↓ ' + Number(item.downloads).toLocaleString() : '') + '<br>★ ' + Number(item.stars || 0).toLocaleString() + '</small></div><button type="button" class="market-install" data-market-install="' + escapeHtml(item.name) + '">安装</button></div><p>' + escapeHtml(extensionDescription(item)) + '</p>' + (shots.length ? '<div class="market-card-shots">' + shots.map(value => '<img src="' + escapeHtml(value) + '" alt="插件预览" loading="lazy" referrerpolicy="no-referrer">').join('') + '</div>' : '') + '<div class="market-card-foot"><span class="market-category-tag">' + escapeHtml(categoryName(category) || '插件') + '</span>' + (url ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">项目说明 ↗</a>' : '') + '</div></article>';
+    }).join('');
+    $('#market-results').querySelector('[data-market-more]')?.remove();
+    if (append) $('#market-results .market-grid').insertAdjacentHTML('beforeend', html);
+    else $('#market-results').innerHTML = '<p class="panel-help">dsh-market 目录 · ' + data.total + ' 个结果</p><div class="market-grid">' + html + '</div>';
+    marketOffset += data.plugins.length;
+    if (marketOffset < data.total) $('#market-results').insertAdjacentHTML('beforeend', '<button type="button" data-market-more>加载更多</button>');
+    if (!data.total) $('#market-results').insertAdjacentHTML('beforeend', '<p>未找到匹配插件。</p>');
+  } catch (error) { if (request === marketRequest) $('#market-results').textContent = '市场暂不可用：' + error.message; }
+}
+$('#market-discover').addEventListener('click', () => loadMarket());
+$('#market-installed').addEventListener('click', () => { $('#plugins-panel').classList.remove('market-browsing', 'extension-adding'); $('#market-results').hidden = true; $('#market-category-bar').hidden = true; $('#market-installed').classList.add('selected'); $('#market-discover').classList.remove('selected'); activePluginTab = 'installed'; scheduleExtensionRefresh(); });
+$('#market-categories').addEventListener('click', event => { const button = event.target.closest('[data-market-category]'); if (button) { marketCategory = button.dataset.marketCategory; loadMarket(); } });
+$('#market-sort').addEventListener('change', () => loadMarket());
+$('#market-refresh').addEventListener('click', () => { scheduleExtensionRefresh(); if (!$('#market-results').hidden) loadMarket(); });
+$('#market-search').addEventListener('input', () => { clearTimeout(marketQueryTimer); marketQueryTimer = setTimeout(() => loadMarket(), 300); });
+$('#market-results').addEventListener('click', async event => {
+  if (event.target.closest('[data-market-more]')) return loadMarket(true);
+  const button = event.target.closest('[data-market-install]');
+  if (!button) return;
+  openMarketDetail(button.dataset.marketInstall);
+});
 $('#settings-install-plugin-btn')?.addEventListener('click', () => installPluginFromInput('#settings-install-plugin-path', '#settings-install-plugin-feedback'));
 
 async function handleDshInventoryClick(event) {
+  const detail = event.target.closest('[data-extension-detail]');
+  if (detail) return openInstalledDetail(detail.dataset.extensionDetail);
   const button = event.target.closest('button');
   if (!button) return;
   if (button.dataset.dshToggle) {
@@ -4562,7 +4896,46 @@ $('#team-review-resume-btn')?.addEventListener('click', () => {
   resumeCurrentChat(team?.agents || null);
 });
 $('#brand-home').addEventListener('click', () => startNewChat(null));
-$('#composer-project').addEventListener('click', () => $('#attachment-input').click());
+$('#composer-project').addEventListener('click', async () => {
+  const menu = $('#composer-add-menu');
+  menu.hidden = !menu.hidden;
+  if (menu.hidden) return;
+  menu.innerHTML = '<button type="button" data-add-files>' + attachmentMenuIcon + '<strong>文件和文件夹</strong></button><small>插件、技能与 MCP</small><p>正在读取已安装能力…</p>';
+  try {
+    const data = await api('/dsh/plugins' + (currentProjectId() ? '?project_id=' + encodeURIComponent(currentProjectId()) : ''));
+    const entries = [...(data.installed || []), ...(data.tool_plugins || []), ...(data.skills || []), ...(data.mcp_servers || [])].filter(item => item.enabled !== false && item.runtime !== 'native-surface');
+    menu.innerHTML = '<button type="button" data-add-files>' + attachmentMenuIcon + '<strong>文件和文件夹</strong></button><small>插件、技能与 MCP</small>' + entries.map(item => '<button type="button" data-select-extension="' + escapeHtml(item.name) + '" data-extension-runtime="' + escapeHtml(item.runtime || '') + '"><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.description || item.kind || '') + '</span></button>').join('') + (!entries.length ? '<p>暂无已启用能力</p>' : '');
+  } catch (error) { menu.innerHTML = '<p>' + escapeHtml(error.message) + '</p>'; }
+});
+$('#composer-add-menu').addEventListener('click', event => {
+  if (event.target.closest('[data-add-files]')) $('#attachment-input').click();
+  const extension = event.target.closest('[data-select-extension]');
+  if (extension) {
+    $('#prompt').value = '请使用「' + extension.dataset.selectExtension + '」：' + $('#prompt').value;
+    $('#prompt').focus();
+  }
+  $('#composer-add-menu').hidden = true;
+});
+document.addEventListener('click', async event => {
+  const button = event.target.closest('[data-team-document]');
+  if (button) { try { closeCustomizationPage(); await openWorkspaceFile(button.dataset.teamDocument); } catch (error) { toast(error.message, true); } }
+});
+document.addEventListener('click', event => {
+  if (!event.target.closest('#composer-add-menu, #composer-project')) $('#composer-add-menu').hidden = true;
+});
+window.maspDesktop?.externalApplications().then(apps => {
+  for (const app of apps) $('#workspace-open-with').add(new Option(app.name, app.id));
+}).catch(error => toast(error.message, true));
+$('#workspace-open-with').addEventListener('change', async event => {
+  const application = event.target.value;
+  event.target.value = '';
+  if (!application || !selectedWorkspaceFile) return;
+  if (!window.maspDesktop) return toast('外部打开功能需要桌面应用。', true);
+  try {
+    const file = await api('/projects/' + encodeURIComponent(activeWorkspaceId()) + '/workspace/external-path?path=' + encodeURIComponent(selectedWorkspaceFile));
+    await window.maspDesktop.openFileWith(file.path, application);
+  } catch (error) { toast(error.message, true); }
+});
 async function addAttachments(files) {
   for (const file of files) {
     if (pendingAttachments.length >= 5) { toast('每条消息最多添加 5 个文件。', true); break; }
@@ -4691,6 +5064,7 @@ $('#search-results').addEventListener('click', async (event) => {
 });
 $('#search-close').addEventListener('click', () => $('#search-dialog').close());
 document.querySelectorAll('[data-rail]').forEach((button) => button.addEventListener('click', () => {
+  if (!['plugins', 'skills', 'mcp'].includes(button.dataset.rail)) closeCustomizationPage();
   const target = button.dataset.rail;
   if (target === 'settings') return openSettingsPage();
   closeSettingsPage();
@@ -5042,57 +5416,3 @@ async function initialize() {
   } catch (error) { renderMessage('assistant', '工作空间加载失败：' + error.message); }
 }
 initialize();
-
-async function loadNativeProfiles(selectActive = false) {
-  const data = await api('/native-profiles');
-  const list = $('#native-profile-names');
-  if (list) list.replaceChildren(...data.profiles.map(profile => new Option(profile.name, profile.name)));
-  const name = $('#native-profile-name');
-  if (selectActive && data.active && name) name.value = data.active;
-  const profile = data.profiles.find(item => item.name === name?.value.trim());
-  if (profile) {
-    $('#native-profile-config').value = profile.config;
-    $('#native-profile-patch').value = profile.patch;
-  }
-  if (data.active) setFeedback('#native-profile-feedback', translateUiText('当前 Profile') + ': ' + data.active);
-}
-$('#native-profile-load')?.addEventListener('click', () => loadNativeProfiles().catch(error => setFeedback('#native-profile-feedback', error.message, true)));
-$('#native-profile-save')?.addEventListener('click', async () => {
-  const button = $('#native-profile-save'); button.disabled = true;
-  try {
-    const name = $('#native-profile-name').value.trim();
-    const saved = await api('/native-profiles/' + encodeURIComponent(name), 'PUT', {
-      config: $('#native-profile-config').value, patch: $('#native-profile-patch').value, activate: true,
-    });
-    setFeedback('#native-profile-feedback', translateUiText('配置已验证并启用') + ' · ' + saved.name);
-    scheduleExtensionRefresh();
-  } catch (error) { setFeedback('#native-profile-feedback', error.message, true); }
-  finally { button.disabled = false; }
-});
-loadNativeProfiles(true).catch(() => {});
-
-let readNativeProfileForm = null;
-let nativeProfileFormName = null;
-let nativeProfileFormRevision = null;
-$('#native-profile-form-load')?.addEventListener('click', async () => {
-  try {
-    nativeProfileFormName = $('#native-profile-name').value.trim();
-    const data = await api('/native-profiles/' + encodeURIComponent(nativeProfileFormName) + '/form');
-    nativeProfileFormRevision = data.revision;
-    readNativeProfileForm = window.NativeProfileForm.render($('#native-profile-form'), data);
-    $('#native-profile-form-save').hidden = false;
-  } catch (error) { setFeedback('#native-profile-feedback', error.message, true); }
-});
-$('#native-profile-form-save')?.addEventListener('click', async () => {
-  const button = $('#native-profile-form-save'); button.disabled = true;
-  try {
-    if (!readNativeProfileForm || nativeProfileFormName !== $('#native-profile-name').value.trim()) throw Error('请先读取当前 Profile 的插件设置');
-    await api('/native-profiles/' + encodeURIComponent(nativeProfileFormName) + '/form', 'PUT', { entries: readNativeProfileForm(), revision: nativeProfileFormRevision });
-    await loadNativeProfiles();
-    setFeedback('#native-profile-feedback', translateUiText('配置已验证并启用'));
-    scheduleExtensionRefresh();
-    $('#native-profile-form-save').hidden = true;
-    readNativeProfileForm = null;
-  } catch (error) { setFeedback('#native-profile-feedback', error.message, true); }
-  finally { button.disabled = false; }
-});

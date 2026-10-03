@@ -608,6 +608,98 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             raise ValueError("请提供要加载的本地插件目录或清单路径")
         return install_dsh_plugin_from_path(service().store, service().home, source_path)
 
+    @app.get("/api/dsh/market")
+    def dsh_market(
+        q: str = "",
+        offset: int = Query(default=0, ge=0),
+        limit: int = Query(default=40, ge=1, le=100),
+        category: str = "",
+        sort: str = "stars",
+    ) -> dict[str, Any]:
+        from masp.plugin_market import catalog
+
+        return catalog(q, offset, limit, category, sort)
+
+    @app.post("/api/dsh/market/install", status_code=201)
+    def install_market_plugin(body: dict[str, Any]) -> dict[str, Any]:
+        from masp.plugin_market import install_source
+
+        source = install_source(str(body.get("name") or ""))
+        return install_dsh_plugin_from_path(service().store, service().home, source)
+
+    @app.get("/api/dsh/plugins/{plugin_id}/configuration")
+    def extension_configuration(plugin_id: str) -> dict[str, Any]:
+        from masp.extension_config import bundle_configuration
+
+        return bundle_configuration(service().store, service().home, plugin_id)
+
+    @app.get("/api/dsh/plugins/{plugin_id}/surface")
+    def extension_surface(plugin_id: str) -> dict[str, Any]:
+        from masp.plugin_surface import surface_info
+
+        return surface_info(service().store, plugin_id)
+
+    @app.get("/api/dsh/plugins/{plugin_id}/surface/{asset}")
+    def extension_surface_asset(plugin_id: str, asset: str) -> FileResponse:
+        from masp.plugin_surface import client_asset
+
+        path = client_asset(service().store, service().home, plugin_id, asset)
+        return FileResponse(
+            path, media_type="text/javascript" if asset.endswith(".js") else "text/css"
+        )
+
+    @app.post("/api/dsh/plugins/{plugin_id}/rpc")
+    async def extension_rpc(plugin_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        from masp.plugin_surface import surface_host
+
+        worker = await asyncio.to_thread(surface_host, service().store, service().home, plugin_id)
+        return await asyncio.to_thread(
+            worker.request,
+            "plugin-rpc",
+            channel=body.get("channel"),
+            method=body.get("method"),
+            payload=body.get("payload"),
+        )
+
+    @app.post("/api/dsh/plugins/{plugin_id}/models/import")
+    async def import_extension_models(plugin_id: str, request: Request) -> dict[str, Any]:
+        from masp.plugin_models import import_models
+
+        return await asyncio.to_thread(
+            import_models, service().store, service().home, plugin_id, str(request.base_url)
+        )
+
+    @app.post("/api/dsh/plugins/{plugin_id}/rpc/stream")
+    async def extension_rpc_stream(plugin_id: str, body: dict[str, Any]) -> StreamingResponse:
+        from masp.plugin_surface import rpc_stream
+
+        return StreamingResponse(
+            rpc_stream(service().store, service().home, plugin_id, body),
+            media_type="application/x-ndjson",
+        )
+
+    @app.post("/api/dsh/plugins/{plugin_id}/models/chat/completions")
+    async def extension_model_stream(plugin_id: str, body: dict[str, Any]) -> StreamingResponse:
+        from masp.plugin_models import completion_stream
+
+        return StreamingResponse(
+            completion_stream(service().store, service().home, plugin_id, body),
+            media_type="text/event-stream",
+        )
+
+    @app.put("/api/dsh/plugins/{plugin_id}/configuration")
+    def save_extension_configuration(plugin_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        from masp.extension_config import bundle_configuration
+
+        entries = body.get("entries")
+        if not isinstance(entries, list) or len(entries) > 100:
+            raise ValueError("插件参数必须为最多 100 项的列表")
+        if len(json.dumps(entries).encode()) > 256000:
+            raise ValueError("插件参数超过大小限制")
+        return bundle_configuration(
+            service().store, service().home, plugin_id, entries, body.get("revision")
+        )
+
     @app.get("/api/dsh/builds")
     def pending_extension_builds() -> list[dict[str, Any]]:
         return [
@@ -801,7 +893,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 previous = None
         if previous and isinstance(previous.get("version"), int):
             version = int(previous["version"]) + 1
-            if body.version is not None and body.version != previous["version"] and not conv_id:
+            if body.version is not None and body.version != previous["version"]:
                 raise ValueError("团队已被其他操作修改，请刷新后重试")
         else:
             if body.version is not None and not conv_id:
@@ -830,6 +922,22 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             "max_concurrency": body.max_concurrency,
             "updated_at": now(),
         }
+        old_tasks = {
+            task["subagent_name"]: task for task in (previous or {}).get("pending_tasks", [])
+        }
+        team["pending_tasks"] = [
+            {
+                **old_tasks.get(agent.id, {}),
+                "subagent_name": agent.id,
+                "prompt": agent.responsibility,
+                "model": agent.model_profile_id,
+                "owned_paths": agent.owned_paths,
+            }
+            for agent in body.agents
+        ]
+        from masp.team_review import write_team_documents
+
+        write_team_documents(resolve_workspace_root(project_id), conv_id or project_id, team)
         store.put("team", team, project_id)
         store.put("team_version", {**team, "id": f"{project_id}-v{version}"}, project_id)
         if conv_id:
@@ -861,6 +969,12 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 team = None
         if team is None:
             team = store.get("team", project_id)
+        if (
+            isinstance(body, dict)
+            and body.get("version") is not None
+            and body["version"] != team.get("version")
+        ):
+            raise HTTPException(409, "协作方案已更新，请审核最新版本")
         load_config(store, service().home, team["main_profile_id"])
         if team.get("review_mode") == "open-code-review":
             load_config(
@@ -874,6 +988,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             "status": "approved",
             "workflow_state": "approved",
             "approved_at": now(),
+            "approval_consumed": False,
             "updated_at": now(),
         }
         store.put("team", approved, project_id)
@@ -1218,6 +1333,20 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
     def delete_conversation(conversation_id: str) -> None:
         # Keep messages for undo and allow an in-flight stream to settle safely.
         service().store.update("conversation", conversation_id, deleted_at=now())
+
+    @app.patch("/api/conversations/{conversation_id}")
+    def edit_conversation(conversation_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        changes: dict[str, Any] = {"updated_at": now()}
+        if "title" in body:
+            title = str(body["title"]).strip()
+            if not title or len(title) > 120:
+                raise ValueError("对话名称必须为 1–120 个字符")
+            changes["title"] = title
+        if "pinned" in body:
+            if not isinstance(body["pinned"], bool):
+                raise ValueError("pinned 必须为布尔值")
+            changes["pinned"] = body["pinned"]
+        return service().store.update("conversation", conversation_id, **changes)
 
     @app.post("/api/conversations/{conversation_id}/restore")
     def restore_conversation(conversation_id: str) -> dict[str, Any]:
@@ -2126,7 +2255,17 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 )
 
             had_team_before_turn = bool(conv_team and conv_team.get("agents"))
-            need_team_confirm = False
+            need_team_confirm = (
+                not main_only
+                and not selected_agent
+                and not (
+                    body.execute_team_now
+                    and conv_team
+                    and conv_team.get("status") == "approved"
+                    and body.team_version == conv_team.get("version")
+                    and not conv_team.get("approval_consumed")
+                )
+            )
 
             headers = {}
             if config.api_key:
@@ -2139,7 +2278,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 )
                 team_context_note = (
                     f"当前对话已确认的子 Agent 团队：{roster}。"
-                    "若用户未指定特定子 Agent，请作为主 Agent 自主统筹各子 Agent 分工并直接完成任务。"
+                    "旧团队仅供分工参考，不能继承上一轮批准；本轮重新审核后才能执行。"
                 )
 
             solo_or_sub_extra_context = ""
@@ -2156,11 +2295,11 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 role_intro = (
                     "你是 Micro-Multi 项目的多 Agent 协作总控 Supervisor（主管架构师与协作调度总控），参考开源顶级框架 deer-flow 与 langgraph-supervisor 构建。\n"
                     "【多 Agent 协作核心准则】：\n"
-                    "1. 按任务依赖分工：有两个或更多独立工作时，优先一次调用 start_subagents 创建并启动多个专职子代理；不必逐个 create_subagent。启动立即返回，你同时完成独立的实现或集成工作，使用 wait_subagents 获取先完成的报告。有依赖的任务等待前置报告后启动。多 Agent 模式每一轮必须实际使用至少一个子代理，无论任务难易。\n"
+                    "1. 按任务依赖分工：有两个或更多独立工作时，优先一次调用 start_subagents 创建并启动多个专职子代理；不必逐个 create_subagent。启动立即返回，你同时完成独立的实现或集成工作，使用 wait_subagents 获取先完成的报告。有依赖的任务等待前置报告后启动。每轮先拆分完整任务并提交用户审核，审核前严禁启动子代理。\n"
                     "子代理是真实执行实体，必须用调度工具启动，禁止称之为模拟或用口头描述代替调度。不要把长篇规划当成已完成交付。\n"
                     "2. 明确并发职责与文件归属：避免同时修改同一文件；共享接口先约定，再分工。子代理拥有工具权限，仍须遵守授权与工作区边界。\n"
                     "3. 风险驱动验收：普通改动采用必要的自动检查与一次集成验收，已有有效测试证据不重复测试或追加审查子代理。涉及权限、持久化、并发或关键接口时增加针对性独立审查；发现问题自主修复。后台子代理全部结束并收取报告前，不得宣称任务完成。\n"
-                    "4. 简单问答也必须使用一个子代理处理明确的子任务，不得跳过调用；不要为此追加重复审查。\n"
+                    "4. 简单问答直接回答；新任务和问题反馈重新分析并提交新版协作方案。失败时可强制停止并清除子代理，再尝试其他方案。\n"
                 )
 
             messages: list[dict[str, Any]] = [
@@ -2246,7 +2385,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             *image_parts,
                         ]
                         break
-            allow_tools = not need_team_confirm
+            allow_tools = True
             available_tools = list(CHAT_TOOLS)
             available_tools = [
                 item
@@ -2294,12 +2433,23 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     authorize_native, lambda: work_budget.remaining, cancel_event.is_set
                 )
                 token = native_approval.set(bridge)
-                try:
-                    return await asyncio.to_thread(
-                        execute_plugin, plugin, arguments, workspace_root, store
+                work = asyncio.create_task(
+                    run_cancellable_tool(
+                        execute_plugin,
+                        plugin,
+                        arguments,
+                        workspace_root,
+                        store,
+                        cancel_event=cancel_event,
                     )
+                )
+                try:
+                    return await asyncio.shield(work)
                 finally:
                     bridge.close()
+                    if not work.done():
+                        work.cancel()
+                        await asyncio.gather(work, return_exceptions=True)
                     native_approval.reset(token)
 
             extension_lock = asyncio.Lock()
@@ -2465,14 +2615,42 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                         ]
                         + list(mcp_schemas + plugin_schemas)
                     ),
-                    max_concurrency=default_subagent_concurrency,
+                    max_concurrency=max(
+                        1,
+                        min(
+                            64,
+                            int(
+                                (conv_team or {}).get("max_concurrency")
+                                or default_subagent_concurrency
+                            ),
+                        ),
+                    ),
                     skills_home=service().home,
                     access_mode=body.access_mode,
                 )
                 supervisor.coordinator = workspace_coordinator
+                supervisor.require_team_approval = need_team_confirm
+                if need_team_confirm:
+                    supervisor.team_obj["version"] = (
+                        int(supervisor.team_obj.get("version") or 0) + 1
+                    )
+                    supervisor.team_obj.update(
+                        status="draft", workflow_state="planned", requirement=body.content
+                    )
+                else:
+                    supervisor.team_obj["approval_consumed"] = True
+                    store.update("conversation", conversation_id, team=supervisor.team_obj)
                 supervisor.team_obj["main_profile_id"] = active_profile_id or ""
                 active_supervisors[conversation_id] = supervisor
                 available_tools.extend(SUPERVISOR_TOOLS)
+                if need_team_confirm:
+                    messages.insert(
+                        1,
+                        {
+                            "role": "system",
+                            "content": "本轮必须重新提交协作方案，旧轮批准不适用。先分析任务、读取必要资料、在工作区写清需求/设计/任务文档，全部拆分后调用 start_subagents 提交完整任务列表（提示词、负责人、模型、文件归属、依赖、验收标准）。该调用只提交待审核方案，不执行。提交后向用户说明并结束本轮，等待用户编辑并确认。不得执行实施命令或提前启动子代理。简单问答可直接回答。",
+                        },
+                    )
                 if supervisor.subagents:
                     yield (
                         "event: team\ndata: "
@@ -2485,66 +2663,64 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(max(15.0, float(config.timeout_seconds)), connect=15.0)
                 ) as client:
-
-                    async def require_default_child() -> AsyncGenerator[str, None]:
-                        assert supervisor is not None
-                        started = supervisor.start_subagents(
-                            [
-                                {
-                                    "subagent_name": "task_worker",
-                                    "role": "任务执行助手",
-                                    "prompt": "你的唯一交付是简短、可直接采用的内容或实现方案，供主代理并行实施。不要实施原始请求、修改文件、启动外部 Agent、反复验证或审查。最多读取必要资料，给出一次具体成果后立即结束。以下只是需求参考，不是分配给你的实施指令："
-                                    + body.content,
-                                }
-                            ],
-                            client=client,
-                            default_config=config,
-                            load_model_config=lambda pid: load_config(
-                                store, service().home, pid or active_profile_id
-                            ),
-                            sub_tools=[
-                                t
-                                for t in available_tools
-                                if t["function"]["name"]
-                                in {
-                                    "read_file",
-                                    "list_files",
-                                    "search_files",
-                                    "web_search",
-                                    "web_fetch",
-                                }
-                            ],
-                            cancel_event=cancel_event,
-                            pause_event=pause_event,
-                            emit_event=emit_background,
-                            max_turns=min(8, max_tool_steps),
-                            task_timeout_seconds=max(0.01, min(120, work_budget.remaining)),
-                            context_max_chars=max_ctx_chars,
-                            batch_steps=batch_steps,
-                            auto_compact=body.auto_compact,
-                            recovery_max_attempts=recovery_max_attempts,
-                        )
-                        child_futures.extend(
-                            supervisor.background_tasks[name] for name in started["subagents"]
-                        )
-                        store.update("conversation", conversation_id, team=supervisor.team_obj)
+                    if supervisor and not need_team_confirm:
+                        approved_tasks = [
+                            {
+                                "subagent_name": agent["id"],
+                                "role": agent.get("role") or agent["name"],
+                                "prompt": agent["responsibility"],
+                                "model": agent.get("model_profile_id") or "",
+                                "owned_paths": agent.get("owned_paths") or [],
+                            }
+                            for agent in supervisor.team_obj.get("agents", [])
+                        ]
+                        previous_tasks = {
+                            task["subagent_name"]: task
+                            for task in supervisor.team_obj.get("pending_tasks", [])
+                        }
+                        approved_tasks = [
+                            {**previous_tasks.get(task["subagent_name"], {}), **task}
+                            for task in approved_tasks
+                        ]
+                        if approved_tasks:
+                            started = supervisor.start_subagents(
+                                approved_tasks,
+                                client=client,
+                                default_config=config,
+                                load_model_config=lambda pid: load_config(
+                                    store, service().home, pid or active_profile_id
+                                ),
+                                sub_tools=[
+                                    tool
+                                    for tool in available_tools
+                                    if tool["function"]["name"]
+                                    not in {item["function"]["name"] for item in SUPERVISOR_TOOLS}
+                                ]
+                                + list(mcp_schemas + plugin_schemas),
+                                cancel_event=cancel_event,
+                                pause_event=pause_event,
+                                emit_event=emit_background,
+                                max_turns=max_tool_steps,
+                                task_timeout_seconds=max(0.01, work_budget.remaining),
+                                context_max_chars=max_ctx_chars,
+                                batch_steps=batch_steps,
+                                auto_compact=body.auto_compact,
+                                recovery_max_attempts=recovery_max_attempts,
+                            )
+                            child_futures.extend(
+                                supervisor.background_tasks[name] for name in started["subagents"]
+                            )
+                            await asyncio.sleep(0)
                         messages.insert(
                             1,
                             {
                                 "role": "system",
-                                "content": "多 Agent 模式已在实施前启动 task_worker 并行产出内容或实现方案，文件实施由你负责。不要再将完整原始任务交给它重复实施；需要独立文件分工可额外启动子代理。收取成果后直接整合并结束，不能再重复已完成工作。",
+                                "content": "用户已批准本轮团队方案。按以下已审核负责人、职责、模型、文件归属执行，不得启动未审核的额外任务："
+                                + json.dumps(
+                                    supervisor.team_obj.get("agents", []), ensure_ascii=False
+                                ),
                             },
                         )
-                        yield (
-                            "event: team\ndata: "
-                            + json.dumps(supervisor.get_team_event_data(), ensure_ascii=False)
-                            + "\n\n"
-                        )
-
-                    if supervisor and not native_execution and not cancel_event.is_set():
-                        async for default_child_frame in require_default_child():
-                            yield default_child_frame
-                        await asyncio.sleep(0)
                     # Direct Agent ReAct Execution (Autonomous Supervisor in Multi-Agent mode, or Solo Main Agent)
                     multi_agent_run_id = None
 
@@ -3082,7 +3258,12 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                 }
                             )
                             continue
-                        if not calls and allow_tools and requests_execution(body.content):
+                        if (
+                            not calls
+                            and allow_tools
+                            and not need_team_confirm
+                            and requests_execution(body.content)
+                        ):
                             actual_actions = any(
                                 (
                                     event.get("name")
@@ -3148,6 +3329,20 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                 aborted_by_user = True
                                 break
                             function = call["function"]
+                            if need_team_confirm:
+                                from masp.team_review import planning_tool_allowed
+
+                                if not planning_tool_allowed(
+                                    function["name"], function.get("arguments") or "{}"
+                                ):
+                                    messages.append(
+                                        {
+                                            "role": "tool",
+                                            "tool_call_id": call["id"],
+                                            "content": "本轮团队尚未审核。只允许分析、读取和编写方案文档，请提交完整分工后等待用户确认。",
+                                        }
+                                    )
+                                    continue
                             allowed_names = {item["function"]["name"] for item in available_tools}
                             allowed_names.update(mcp_lookup)
                             allowed_names.update(plugin_lookup)
@@ -3215,6 +3410,22 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                         {"status": "failed", "error": f"加载插件失败：{error}"},
                                         ensure_ascii=False,
                                     )
+                            elif function["name"] == "remove_subagent" and supervisor:
+                                args_obj = json.loads(function["arguments"] or "{}")
+                                result = json.dumps(
+                                    await supervisor.remove_subagent(args_obj["subagent_name"]),
+                                    ensure_ascii=False,
+                                )
+                                store.update(
+                                    "conversation", conversation_id, team=supervisor.team_obj
+                                )
+                                yield (
+                                    "event: team\ndata: "
+                                    + json.dumps(
+                                        supervisor.get_team_event_data(), ensure_ascii=False
+                                    )
+                                    + "\n\n"
+                                )
                             elif function["name"] == "start_subagents" and supervisor:
                                 try:
                                     args_obj = json.loads(function["arguments"] or "{}")
@@ -3257,6 +3468,15 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                         + "\n\n"
                                     )
                                     result = json.dumps(started, ensure_ascii=False)
+                                    if started.get("status") == "awaiting_approval":
+                                        stop_tools_next_turn = True
+                                        termination_reason = "awaiting_team_approval"
+                                        segments.append(
+                                            {
+                                                "type": "team_plan",
+                                                "team": supervisor.get_team_event_data(),
+                                            }
+                                        )
                                 except (ValueError, TypeError, KeyError) as err:
                                     result = json.dumps(
                                         {"status": "failed", "error": str(err)}, ensure_ascii=False
@@ -4242,6 +4462,14 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         if content.startswith("读取工具未能完成：") or content.startswith("读取失败："):
             raise HTTPException(400, content)
         return {"path": path, "content": content}
+
+    @app.get("/api/projects/{project_id}/workspace/external-path")
+    def workspace_external_path(project_id: str, path: str) -> dict[str, str]:
+        root = resolve_workspace_root(project_id).resolve()
+        target = (root / path).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            raise HTTPException(400, "文件必须位于当前工作区")
+        return {"path": str(target)}
 
     def _build_file_diff_review(
         root: Path, rel_path: str, current_content: str, base_content: str | None = None
