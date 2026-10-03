@@ -967,6 +967,8 @@ def list_all_loaded_plugins(
     for bundle in bundles:
         installed.append(bundle)
     for item in tool_plugins:
+        if item.get("bundle_id"):
+            continue
         installed.append(
             {
                 "id": item["id"],
@@ -1054,7 +1056,12 @@ def discover_plugins(
 
 
 def execute_plugin(
-    plugin: dict[str, Any], arguments: str, cwd: Path, store: Store | None = None
+    plugin: dict[str, Any],
+    arguments: str,
+    cwd: Path,
+    store: Store | None = None,
+    *,
+    cancel_signal: Any = None,
 ) -> str:
     if store is not None and not extension_is_enabled(store, plugin):
         raise ValueError("插件已禁用或移除，不能继续调用")
@@ -1080,8 +1087,17 @@ def execute_plugin(
     if isinstance(plugin.get("env"), dict):
         env.update({str(key): str(value) for key, value in plugin["env"].items()})
     env["MICRO_MULTI_WORKSPACE"] = str(cwd.resolve())
+    from functools import partial
+
+    from masp.managed_commands import command_run
+
+    runner = (
+        partial(command_run, cancel_signal=cancel_signal)
+        if cancel_signal is not None
+        else subprocess.run
+    )
     try:
-        result = subprocess.run(
+        result = runner(
             [plugin["command"], *plugin["args"]],
             cwd=Path(plugin["cwd"]) if plugin.get("cwd") else cwd,
             env=env,

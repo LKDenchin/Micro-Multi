@@ -26,7 +26,17 @@ def command_run(
         except UnicodeDecodeError:
             return value.decode("gb18030" if sys.platform == "win32" else "utf-8", errors="replace")
 
-    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+    with (
+        tempfile.TemporaryFile() as stdout,
+        tempfile.TemporaryFile() as stderr,
+        tempfile.TemporaryFile() as stdin,
+    ):
+        input_value = kwargs.get("input")
+        if input_value is not None:
+            stdin.write(
+                input_value.encode("utf-8") if isinstance(input_value, str) else input_value
+            )
+            stdin.seek(0)
         process = subprocess.Popen(
             command,
             cwd=kwargs.get("cwd"),
@@ -34,6 +44,7 @@ def command_run(
             shell=kwargs.get("shell", False),
             stdout=stdout,
             stderr=stderr,
+            stdin=stdin if input_value is not None else subprocess.DEVNULL,
             creationflags=native_creation_flags(),
             start_new_session=sys.platform != "win32",
         )
@@ -84,4 +95,4 @@ async def run_cancellable_tool(
             watcher.cancel()
             await asyncio.gather(watcher, return_exceptions=True)
         if not work.done():
-            await asyncio.shield(work)
+            await asyncio.gather(asyncio.shield(work), return_exceptions=True)
