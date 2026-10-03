@@ -110,27 +110,6 @@ def test_lead_writes_while_two_workers_run_and_collects_before_final(tmp_path, m
         messages = kwargs["json"]["messages"]
         lead_calls.append(json.loads(json.dumps(messages)))
         if len(lead_calls) == 1:
-            assert "task_worker" in worker_starts  # child is admitted before lead implementation
-            return Response(
-                {
-                    "tool_calls": [
-                        call(
-                            "start_subagents",
-                            {
-                                "tasks": [
-                                    {
-                                        "subagent_name": name,
-                                        "prompt": "独立实现",
-                                        "owned_paths": [f"{name}.txt"],
-                                    }
-                                    for name in ("alpha", "beta")
-                                ]
-                            },
-                        )
-                    ]
-                }
-            )
-        if len(lead_calls) == 2:
             return Response(
                 {
                     "tool_calls": [
@@ -160,17 +139,47 @@ def test_lead_writes_while_two_workers_run_and_collects_before_final(tmp_path, m
             "/api/conversations",
             json={"project_id": project["id"], "model_profile_id": profile["id"]},
         ).json()
+        team = client.put(
+            f"/api/projects/{project['id']}/team",
+            json={
+                "conversation_id": conv["id"],
+                "requirement": "Implement independent modules",
+                "main_profile_id": profile["id"],
+                "agents": [
+                    {
+                        "id": name,
+                        "name": name,
+                        "responsibility": "Implement independent module",
+                        "model_profile_id": profile["id"],
+                        "owned_paths": [f"{name}.txt"],
+                    }
+                    for name in ("alpha", "beta")
+                ],
+            },
+        ).json()
+        assert (
+            client.post(
+                f"/api/projects/{project['id']}/team/approve",
+                json={"conversation_id": conv["id"], "version": team["version"]},
+            ).status_code
+            == 200
+        )
         response = client.post(
             f"/api/conversations/{conv['id']}/messages",
-            json={"content": "实现三个独立模块", "access_mode": "commands"},
+            json={
+                "content": "Execute the approved plan",
+                "access_mode": "commands",
+                "execute_team_now": True,
+                "team_version": team["version"],
+            },
         )
         assert response.status_code == 200 and "event: error" not in response.text
         root = Path(project["repository"])
-        assert worker_starts == {"task_worker", "alpha", "beta"}
+        assert worker_starts == {"alpha", "beta"}
         assert all((root / name).is_file() for name in ("lead.txt", "alpha.txt", "beta.txt"))
         assert (
-            len(lead_calls) == 4
-        )  # start, lead write, draft, one integration; no polling model loop
+            len(lead_calls) == 3
+        )  # approved workers, lead write, draft, integration; no polling model loop
         assert any("后台子代理执行状态" in str(m.get("content")) for m in lead_calls[-1])
 
 

@@ -135,6 +135,7 @@ class ChatMessageCreate(StrictModel):
     autonomous_hours: float = Field(default=8, ge=0.01, le=8)
     auto_compact: bool = True
     execute_team_now: bool = False
+    team_version: int | None = None
     execute_plan_now: bool = False
     plan_id: str | None = None
     main_only: bool = False
@@ -245,9 +246,10 @@ class ModelProfileInput(StrictModel):
 
 
 class TeamAgentInput(StrictModel):
+    system_prompt: str = Field(default="", max_length=32000)
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,40}$")
     name: str = Field(min_length=1, max_length=80)
-    responsibility: str = Field(min_length=1, max_length=2000)
+    responsibility: str = Field(min_length=1, max_length=32000)
     model_profile_id: str
     owned_paths: list[str] = Field(default_factory=list, max_length=30)
     locked: bool = False
@@ -263,7 +265,7 @@ class TeamInput(StrictModel):
     main_profile_id: str
     review_profile_id: str | None = None
     review_mode: Literal["adaptive", "internal", "open-code-review"] = "adaptive"
-    agents: list[TeamAgentInput] = Field(min_length=1, max_length=8)
+    agents: list[TeamAgentInput] = Field(min_length=1, max_length=64)
     max_concurrency: int = Field(default=2, ge=1, le=64)
     version: int | None = None
     conversation_id: str | None = None

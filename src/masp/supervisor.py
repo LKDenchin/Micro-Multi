@@ -54,6 +54,18 @@ SUPERVISOR_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "remove_subagent",
+            "description": "强制停止并清除失败或不再需要的子代理，再尝试其他解决方案。",
+            "parameters": {
+                "type": "object",
+                "properties": {"subagent_name": {"type": "string"}},
+                "required": ["subagent_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "start_subagents",
             "description": "一次创建并启动多个独立子代理，立即返回，主 Agent 可同时继续工作。无需先 create_subagent。用 wait_subagents 获取完成报告；有依赖的任务等前置报告后再启动。清理与重建必须用 depends_on 声明依赖。owned_paths 声明负责的文件或目录；不同路径可并行，同路径或未声明路径的写任务会排队，主 Agent 也遵守文件锁。",
             "parameters": {
@@ -356,6 +368,7 @@ class SupervisorManager:
         self.agent_locks: dict[str, asyncio.Lock] = {}
         self.background_tasks: dict[str, asyncio.Task[dict[str, Any]]] = {}
         self.delegation_started = False
+        self.require_team_approval = False
         self.coordinator = WorkspaceCoordinator(workspace_root)
         self.completed_reports: dict[str, dict[str, Any]] = {}
         self.histories: dict[str, list[dict[str, Any]]] = self.team_obj.get("histories", {})
@@ -471,6 +484,70 @@ class SupervisorManager:
 
         for name in names:
             visit(name, set())
+
+        if self.require_team_approval:
+            self.subagents.clear()
+            for name, item in zip(names, tasks, strict=True):
+                self.create_subagent(
+                    name, item.get("role") or name, item["prompt"], model=item.get("model")
+                )
+                self.subagents[name].owned_paths = list(item.get("owned_paths") or [])
+            self.team_obj.update(status="draft", workflow_state="planned", pending_tasks=tasks)
+            self._sync_team_obj()
+            directory = self.workspace_root / ".masp" / "team-plans"
+            directory.mkdir(parents=True, exist_ok=True)
+            document_root = directory / (
+                self.conversation_id + "-v" + str(self.team_obj.get("version", 1))
+            )
+            document_root.mkdir(exist_ok=True)
+            documents = {
+                "requirements.md": "# 本轮需求\n\n"
+                + str(self.team_obj.get("requirement") or "")
+                + "\n",
+                "design.md": "# 协作设计\n\n先审核本方案，确认后执行。按任务依赖和文件归属协调；失败任务可停止并清除，重新选择解决方案。\n\n"
+                + "\n".join(
+                    "- "
+                    + item["subagent_name"]
+                    + "："
+                    + str(item.get("role") or item["subagent_name"])
+                    + "；负责文件："
+                    + ", ".join(item.get("owned_paths") or [])
+                    + "；依赖："
+                    + ", ".join(item.get("depends_on") or [])
+                    for item in tasks
+                )
+                + "\n",
+                "tasks.md": "# 完整任务分配\n\n"
+                + "\n\n".join(
+                    "## "
+                    + item["subagent_name"]
+                    + "\n\n模型："
+                    + str(item.get("model") or "继承主模型")
+                    + "\n\n任务与提示词：\n\n"
+                    + item["prompt"]
+                    + "\n\n验收标准：\n"
+                    + "\n".join(
+                        "- " + str(value) for value in item.get("acceptance_criteria") or []
+                    )
+                    for item in tasks
+                )
+                + "\n",
+            }
+            for filename, content in documents.items():
+                (document_root / filename).write_text(content, encoding="utf-8")
+            self.team_obj["plan_documents"] = [
+                (document_root / filename).relative_to(self.workspace_root).as_posix()
+                for filename in documents
+            ]
+            (
+                directory
+                / (self.conversation_id + "-v" + str(self.team_obj.get("version", 1)) + ".json")
+            ).write_text(json.dumps(self.team_obj, ensure_ascii=False, indent=2), encoding="utf-8")
+            return {
+                "status": "awaiting_approval",
+                "subagents": [],
+                "message": "方案已提交用户审核。等待用户确认，禁止启动或替代执行子任务。",
+            }
 
         async def dispatch_unlocked(name: str, item: dict[str, Any]) -> dict[str, Any]:
             for dependency in dependencies[name]:
@@ -588,9 +665,24 @@ class SupervisorManager:
             spec.owned_paths = list(ag.get("owned_paths") or [])
         for name in list(self.subagents):
             if name not in members:
+                task = self.background_tasks.get(name)
+                if task and not task.done():
+                    task.cancel()
                 self.subagents[name].status = "cancelled"
                 del self.subagents[name]
         self._sync_team_obj()
+
+    async def remove_subagent(self, name: str) -> dict[str, Any]:
+        task = self.background_tasks.pop(name, None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await self.coordinator.release_reservation(name)
+        self.subagents.pop(name, None)
+        self.histories.pop(name, None)
+        self.completed_reports.pop(name, None)
+        self._sync_team_obj()
+        return {"status": "removed", "subagent_name": name}
 
     def _sync_team_obj(self) -> dict[str, Any]:
         """Keep team_obj in sync with active subagents."""
@@ -604,9 +696,10 @@ class SupervisorManager:
         """Get the payload to emit as SSE event: team."""
         self._sync_team_obj()
         return {
+            **self.team_obj,
             "conversation_id": self.conversation_id,
-            "status": "approved",
-            "workflow_state": "running",
+            "status": "draft" if self.require_team_approval else "approved",
+            "workflow_state": "planned" if self.require_team_approval else "running",
             "first_turn_confirm": False,
             "agents": [s.to_team_agent_dict() for s in self.subagents.values()],
             "version": int(self.team_obj.get("version") or 1),
@@ -621,6 +714,18 @@ class SupervisorManager:
         acceptance_criteria: list[str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        if self.require_team_approval:
+            result = self.start_subagents(
+                [
+                    {
+                        "subagent_name": subagent_name,
+                        "prompt": task_prompt,
+                        "acceptance_criteria": acceptance_criteria or [],
+                    }
+                ]
+            )
+            await kwargs["emit_event"]("team", self.get_team_event_data())
+            return result
         name = re.sub(r"[^a-zA-Z0-9_-]", "_", subagent_name.strip().lower()) or "subagent"
         self.delegation_started = True
         lock = self.agent_locks.setdefault(name, asyncio.Lock())
