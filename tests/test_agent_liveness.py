@@ -129,6 +129,7 @@ def test_cancelled_checkpoint_finishes_commit_before_close(tmp_path):
 def test_worker_reference_budget_and_queued_state(tmp_path):
     async def run():
         requests, events = [], []
+        queued = asyncio.Event()
 
         class Client:
             def stream(self, *args, **kwargs):
@@ -137,6 +138,8 @@ def test_worker_reference_budget_and_queued_state(tmp_path):
 
         async def emit(kind, data):
             events.append(data)
+            if "槽位" in data.get("thinking", ""):
+                queued.set()
 
         mgr = SupervisorManager(
             tmp_path,
@@ -164,7 +167,7 @@ def test_worker_reference_budget_and_queued_state(tmp_path):
                 context_max_chars=12000,
             )
         )
-        await asyncio.sleep(0.01)
+        await asyncio.wait_for(queued.wait(), timeout=5)
         assert not requests and events and "槽位" in events[0]["thinking"]
         mgr.capacity.release()
         await task
