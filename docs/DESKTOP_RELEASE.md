@@ -100,5 +100,3 @@ Installed data defaults to `%APPDATA%\Micro-Multi\data` on Windows and `${XDG_CO
 The smoke script starts the actual packaged executable with empty temporary data and no inherited model settings. It checks the required Node dependency and peer closure inside the package, backend health, built-in MCP, empty lists, the real renderer and desktop bridge, credential read/write/delete, review binary and native dsh Cordis. AppImage checks locate the running single file's actual extracted resources. A temporary loopback DevTools port and background-rendering test switches are enabled for this check only; test processes and data are cleaned afterward. See [release validation](RELEASE_VALIDATION.md).
 
 Run `python scripts/publication_audit.py` before committing. Publish installation packages and `SHA256SUMS.txt` as Release assets, not source files. The manual desktop workflow builds Windows and Linux packages without publishing.
-
-The official repository is [Micro-Multi](https://github.com/LKDenchin/Micro-Multi). Existing v0.1.0 assets remain the published baseline. This source update does not publish a tag or Release; see [current changes](CURRENT_CHANGES.md).

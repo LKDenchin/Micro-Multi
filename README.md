@@ -1,136 +1,94 @@
 <div align="center">
-  <img src="src/masp/web/micro-multi.svg" alt="Micro-Multi" width="96" />
+  <img src="src/masp/web/micro-multi.svg" alt="Micro-Multi" width="88" />
   <h1>Micro-Multi</h1>
-  <p><strong>Your local workspace for a team of AI agents.</strong></p>
+  <p>A desktop app for working on local projects with AI agents.</p>
   <p>English · <a href="README.zh-CN.md">简体中文</a></p>
-  <p><a href="https://lkdenchin.github.io/Micro-Multi/">Website</a> · <a href="#quick-install">Install</a> · <a href="#getting-started">Get started</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme.html">Documentation</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
-  <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
+  <p><a href="https://lkdenchin.github.io/Micro-Multi/">Website</a> · <a href="#installation">Install</a> · <a href="#your-first-task">Get started</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme.html">Documentation</a></p>
 </div>
 
-Micro-Multi brings conversations, code, tools, and a team of agents into one desktop workspace. Describe what you want to build: the lead agent prepares a team plan for your review, then starts specialists after you confirm the plan, follows parallel tasks and reviews their results.
+Micro-Multi lets you work with AI agents in a local project folder. Connect a model service, open a project and describe the task. The agent can read code, edit files, run commands and use the tools you have enabled. The conversation, file browser, diffs and tool output are available in the same app.
 
-Connect your own OpenAI-compatible model endpoint, choose models for different agents, and work with your local Git projects. You can follow what each agent is doing, inspect the files it changes, and keep the conversation for the next session.
+For a small change, use the lead agent on its own. For work that needs several roles, choose team mode: the lead proposes a plan, you review the members and their assignments, and the team starts after you confirm it. You can follow each member's work and check the result against the project files.
 
+The app supports Windows and Linux, with English and Simplified Chinese interfaces. You supply the model endpoint and credentials. Skills, MCP servers and plugins from the deepseek-harness (dsh) ecosystem can add instructions and tools.
 
-**Compatible with the deepseek-harness (dsh) plugin ecosystem.** Micro-Multi runs native dsh Cordis Host plugins, bringing their tools into the lead agent and specialist agents in your desktop workspace.
+## What you can use it for
 
-| | What you can do |
+| Task | How Micro-Multi helps |
 | --- | --- |
-| **dsh plugin compatibility** | Load native deepseek-harness Cordis Host packages with tool registration, services, dependency injection, events, and lifecycle management. |
-| **A team that works together** | Delegate to specialist agents, run independent tasks concurrently, and collect reports as they finish. |
-| **Your models, your choice** | Configure compatible API endpoints, test connections, and choose a model for each agent. |
-| **A visible workspace** | Browse projects, files, diffs, reviews, previews, terminal output, and tool records without switching apps. |
-| **Conversations that continue** | Keep streamed replies and task history locally; resume work and compact context as a session grows. |
-| **Tools you can extend** | Add Skills, MCP servers, local command plugins, and Cordis Host packages. |
-| **Control when you need it** | Choose permissions, inspect requested operations, pause work, and stop a running turn. |
-| **A desktop that fits your workflow** | Paste attachments, pick project folders, and switch between English and Chinese, light and dark themes. |
+| Understand a codebase | Ask the agent to trace an entry point, explain a module or find the files involved in a feature. |
+| Make and test a change | Work in your project folder, inspect the diff and read the output of commands and tests. |
+| Split up a larger task | Assign implementation, testing or review to different team members and choose their models. |
+| Use external tools | Connect an MCP server, install a dsh plugin or provide a Skill for a recurring task. |
+| Continue existing work | Reopen a saved conversation with its messages, tool records and member reports. |
 
----
+## Installation
 
-## Current source update
+Download a package from [GitHub Releases](https://github.com/LKDenchin/Micro-Multi/releases/latest).
 
-The 2026-10-05 source update keeps package version 0.1.0 and does not publish a new installer or Release. Existing downloads remain the published baseline; run or build current source to use these changes. See [current changes](docs/CURRENT_CHANGES.md) and [changelog](CHANGELOG.md).
-
-- Native Cordis Loader and ClientModuleSystem resolve declared service/client dependencies, missing libraries and package-local build tools through one generic loading path.
-- Plugin settings stay in details; schema-backed forms and the original namespace settings API validate, persist and recover configuration. Runtime source revisions invalidate old client/host caches.
-- Browser-safe bundles, WebSocket subscriptions and contained portals stabilize plugin loading and startup.
-- Team plans require confirmation of each version; chosen member models are preserved. Model parameter negotiation, failure diagnostics and durable stream batching improve conversation execution.
-
----
-
-## Quick Install
-
-Download the package for your system from the **[Releases page](https://github.com/LKDenchin/Micro-Multi/releases/latest)**. To build a package yourself, follow the [desktop build guide](docs/DESKTOP_RELEASE.md).
-
-| Platform | Download |
+| System | Package |
 | --- | --- |
-| Windows x64 | [Micro-Multi-Setup-0.1.0-x64.exe](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
-| Debian / Ubuntu x64 | [Micro-Multi-0.1.0-amd64.deb](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |
-| Linux x64 AppImage | [Micro-Multi-0.1.0-x86_64.AppImage](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-x86_64.AppImage) |
-| SHA-256 | [SHA256SUMS.txt](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/SHA256SUMS.txt) |
+| Windows x64 | [NSIS installer](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
+| Debian / Ubuntu x64 | [Debian package](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |
+| Linux x64 | [AppImage](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-x86_64.AppImage) |
+| Checksums | [SHA256SUMS.txt](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/SHA256SUMS.txt) |
 
-### Windows
+On Windows, run the installer and open Micro-Multi from the Start menu. On Debian or Ubuntu, install the downloaded package with `sudo apt install ./<package>.deb`. For AppImage, make the file executable with `chmod +x <file>.AppImage` and run it. If FUSE is unavailable, add `--appimage-extract-and-run`.
 
-Run `Micro-Multi-Setup-0.1.0-x64.exe`, choose an installation directory, and launch Micro-Multi from the Start menu.
+The packages include Python and Node.js. Install Git for repository work. Docker and any CLI required by a plugin are installed separately. The [desktop guide](docs/DESKTOP_RELEASE.md) covers Linux keyring requirements, Ubuntu AppImage setup, checksums and building your own package.
 
-### Linux — Debian / Ubuntu
+## Your first task
 
-```bash
-sudo apt install ./Micro-Multi-0.1.0-amd64.deb
-micro-multi
-```
+1. Open **Settings → Models → Add or edit model**. Enter a name, API base URL, model ID and API key, then test the connection.
+2. Add a local project folder. Keep **Link this directory** selected to work in the original folder. A folder without Git is initialized as a repository.
+3. Start a conversation in that project. Select the model, **Lead agent only**, and the permissions you want to allow.
+4. Describe the change and how to check it. For example:
 
-### Linux — AppImage
+   ```text
+   Find the endpoint that lists orders. Add pagination, keeping the existing
+   response fields. Run the relevant tests and explain any failures.
+   ```
 
-```bash
-chmod +x Micro-Multi-0.1.0-x86_64.AppImage
-./Micro-Multi-0.1.0-x86_64.AppImage
-```
+5. Read the reply, open the changed files and inspect the diff. Command output is recorded with the tool calls. Send a follow-up message if the result needs adjustment.
 
-If FUSE is unavailable, run the AppImage with `--appimage-extract-and-run`.
+You can attach files to a conversation and open the right-hand inspector to browse files, reviews, previews and terminal activity. See [projects and conversations](docs/WORKSPACE.md) for the main controls and [model setup](docs/MODELS.md) for connection details.
 
-On Ubuntu 24.04+, enable the application-specific user namespace policy described in the [AppImage setup guide](docs/DESKTOP_RELEASE.md#ubuntu-appimage-sandbox-policy).
+## Working with a team
 
-The desktop packages include Python and Node. Install Git for repository operations; Docker and external extension tools are optional and installed separately. Linux model-key storage requires an active Secret Service keyring, such as GNOME Keyring. Compare your download against `SHA256SUMS.txt`; the Windows installer is currently unsigned.
+Choose multi-agent collaboration in the composer when the task has separate responsibilities. The lead prepares a plan with member roles, tasks, file ownership and models. Use **Adjust team** to change it, then **Confirm execution** to start that plan. Each new task or round of feedback needs its own confirmation.
 
----
+Members follow the lead model unless you select another model for them. The team view shows their status and reports; tool records show what they actually ran. You can add instructions while they work, pause the conversation or stop it. Before accepting the result, inspect the changes and the test output. The [collaboration guide](docs/AUTONOMOUS_COLLABORATION.md) walks through this process.
 
-## Getting Started
+## Adding instructions and tools
 
-1. **Connect a model.** Open Models, enter your API endpoint, model ID, and key, then test the connection.
-2. **Open a project.** Create a project or import a local Git repository.
-3. **Describe the outcome.** Start a conversation with a task such as “Add pagination to this API and verify the behavior.”
-4. **Review the team plan.** Choose multi-agent collaboration, adjust roles and models, and confirm the current plan before members start; you can also use the lead alone.
-5. **Review the result.** Inspect changed files, tool activity, reviews, and verification before using the work.
+Open **Customization** to manage extensions.
 
-You can adjust an agent's model or responsibility, add an attachment, and continue the conversation with feedback. Projects and conversations are kept locally across sessions.
-
----
-
-## Models and Extensions
-
-Use an endpoint compatible with OpenAI Chat Completions. Micro-Multi stores model-profile keys in the operating system credential store; no model credentials are included in the app.
-
-Skills give agents reusable instructions. Discover project Skills in `.agents/skills/`, or add user Skills through the workspace. MCP servers and plugins connect additional tools. Install trusted extensions through Customization and inspect the access they request.
-
-See [autonomous collaboration](docs/AUTONOMOUS_COLLABORATION.md) and the [extension guide](docs/NATIVE_CORDIS.md) for more details.
-
----
-
-## deepseek-harness Plugin Ecosystem
-
-Micro-Multi uses the official dsh Cordis and tools runtimes. Install a dsh Cordis Host package through Customization: its tools become available to both the lead agent and specialist agents. Plugins can register services, inject dependencies, validate configuration and tool parameters, publish events, and release resources when disabled or removed.
-
-Each package keeps its own state within a workspace. The host provides `tools`, `systemPrompt`, and `microMulti` services; `microMulti.workspace` and `microMulti.pluginRoot` expose the workspace and package locations. The host recursively resolves declared native services; client pages use the official module system. See the guide for dependency builds, settings, cache invalidation and diagnostics.
-
-Try the included [`examples/native-cordis`](examples/native-cordis) package, or follow the [dsh plugin guide](docs/NATIVE_CORDIS.md) to load your own package. See the [dsh repository](https://github.com/deepseek-ai/deepseek-harness) for the plugin framework.
-
----
-
-## Workspace Quick Reference
-
-| Action | Where to find it |
+| Extension | Use it for |
 | --- | --- |
-| Add or test a model | Models |
-| Create or import a project | Project navigation |
-| Start or reopen a conversation | Conversation list |
-| Choose collaboration mode or a model | Conversation composer |
-| Follow individual agents | Team view and tool records |
-| Inspect files, diffs, reviews, or terminal activity | Workspace inspector |
-| Add Skills, MCP servers, or plugins | Settings / extensions |
-| Change language, theme, or layout | Settings |
+| Skills | Reusable instructions in a `SKILL.md` file. Project Skills live in `.agents/skills/`. |
+| MCP servers | Tools provided by a configured local or remote server. |
+| dsh plugins | Tools, model providers and interface components from the deepseek-harness ecosystem. |
+| Command plugins | Tools implemented by a local command. |
 
----
+Open an installed plugin's details to configure it. A plugin may need its own account, API key or external program before its tools can be used. The composer **+** menu lists enabled capabilities. Read the [extension guide](docs/extensions.md) to choose an extension type, or the [dsh guide](docs/NATIVE_CORDIS.md) to install or develop a plugin.
 
-## Run from Source
+## Permissions and data
 
-Use Python 3.11+, Node.js 24+, npm, and Git. From the repository root:
+The composer offers three permission levels: **Ask for approval** asks before file changes and commands; **Allow file edits** allows file editing but still asks before commands; **Full access** permits file operations, commands and enabled external tools. The [permissions guide](docs/sandbox.md) explains what these settings control.
+
+Projects, conversations and attachments are stored locally. Requests to your configured model service include the context needed for the task; enabled extensions may also send data to their services. Model-profile API keys use the operating system credential store. Local commands and native plugins run with your user account's system permissions.
+
+Installed data lives in `%APPDATA%\Micro-Multi\data` on Windows and `${XDG_CONFIG_HOME:-~/.config}/Micro-Multi/data` on Linux. Source mode uses `.masp` in the working directory. Set `MASP_HOME` to choose another directory. Updates and uninstall preserve the data; back it up separately from the application files.
+
+## Run from source
+
+Use Python 3.11+, Node.js 24+, npm and Git. From the repository root:
 
 ```bash
 python -m venv .venv
 ```
 
-Activate the environment with `source .venv/bin/activate` on Linux/macOS or `.\.venv\Scripts\Activate.ps1` in Windows PowerShell, then run:
+Activate the environment with `.\.venv\Scripts\Activate.ps1` in Windows PowerShell, or `source .venv/bin/activate` on Linux. Then run:
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -138,52 +96,26 @@ npm ci
 npm run desktop
 ```
 
-For browser access, run `python -m masp.cli serve` and open <http://127.0.0.1:3080/>.
+To use a browser instead, run `python -m masp.cli serve` and open `http://127.0.0.1:3080/`. The [deployment guide](docs/deployment.md) explains configuration and data storage.
 
-| Setting | Purpose |
+## Technology
+
+| Layer | Implementation |
 | --- | --- |
-| `MASP_HOME` | Override local data storage; source default is `.masp` |
-| `MASP_PORT` | Desktop backend port; default `3080` |
-| `MASP_MODEL_BASE_URL` | Optional environment-configured model endpoint |
-| `MASP_MODEL_NAME` | Optional environment-configured model ID |
-| `MASP_MODEL_API_KEY` | Optional model credential; never commit it |
+| Desktop | Electron, with a sandboxed renderer and a preload bridge for desktop actions. |
+| Backend | Python, FastAPI, Uvicorn and Pydantic for local APIs and agent execution. |
+| Interface | HTML, CSS and JavaScript; React renders native plugin components. |
+| Agent and plugin runtime | Node.js, Cordis and deepseek-harness packages. |
+| Storage | SQLite for application records, local files for attachments and the OS credential store for model keys. |
+| Connections | HTTP APIs, SSE for streamed conversation events and WebSocket for plugin subscriptions. |
+| Builds and documentation | electron-builder, esbuild and a static site generated from Markdown. |
 
-Installed data defaults to `%APPDATA%\Micro-Multi\data` on Windows and `${XDG_CONFIG_HOME:-~/.config}/Micro-Multi/data` on Linux. Updates and uninstall preserve user data.
+The [architecture guide](docs/architecture.md) describes how these parts communicate and points to the relevant source directories.
 
----
+## Documentation and contributing
 
-## Documentation
+Start with [model setup](docs/MODELS.md), [projects and conversations](docs/WORKSPACE.md), [team collaboration](docs/AUTONOMOUS_COLLABORATION.md) and [extensions](docs/extensions.md). If something does not work as expected, see [troubleshooting](docs/TROUBLESHOOTING.md).
 
-| Guide | What's covered |
-| --- | --- |
-| [Desktop build and release](docs/DESKTOP_RELEASE.md) | Building installers, running checks, and publishing packages |
-| [Autonomous collaboration](docs/AUTONOMOUS_COLLABORATION.md) | Delegation, parallel work, progress, and review |
-| [Extensions](docs/NATIVE_CORDIS.md) | Cordis Host packages and a working example |
-| [Persistence and recovery](docs/DURABLE_TURNS_AND_MODEL_RECOVERY.md) | Saved turns, interruptions, and recovery |
-| [Security](SECURITY.md) | Data, command permissions, and reporting vulnerabilities |
-| [Contributing](CONTRIBUTING.md) | Development setup, checks, and pull requests |
-| [Changelog](CHANGELOG.md) | Release history |
+Report reproducible bugs in [Issues](https://github.com/LKDenchin/Micro-Multi/issues), including the steps and sanitized logs. Questions and ideas belong in [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions). Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting code. Report vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 
----
-
-## Contributing
-
-Contributions are welcome: bug fixes, tests, translations, documentation, and extensions. Read [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md), and include the validation you actually ran.
-
-```bash
-python -m pytest -q
-python -m ruff check src tests scripts
-python -m mypy src/masp
-```
-
-## Community
-
-Use [Issues](https://github.com/LKDenchin/Micro-Multi/issues) for reproducible bugs and feature requests. Include your version, operating system, reproduction steps, and sanitized logs. For questions and ideas, visit [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions). Report vulnerabilities through the private channel described in [SECURITY.md](SECURITY.md).
-
-Your conversations and uploads stay in local storage, but configured models and enabled extensions can receive the context needed to perform tasks. Local command execution runs on your machine; permission checks are not an operating system sandbox.
-
----
-
-## License
-
-[Apache-2.0](LICENSE). Third-party components retain their licenses and notices; see [NOTICE](NOTICE) and [runtime provenance](docs/UPSTREAM_RUNTIME_PROVENANCE.md).
+Micro-Multi is licensed under [Apache-2.0](LICENSE). Third-party components retain their own licenses; see [NOTICE](NOTICE) and [runtime provenance](docs/UPSTREAM_RUNTIME_PROVENANCE.md).

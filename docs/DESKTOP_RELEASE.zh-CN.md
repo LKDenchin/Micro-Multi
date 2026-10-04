@@ -99,5 +99,3 @@ Windows Python 来自 python.org 嵌入版。Linux 使用 `20261001` 发布的�
 冒烟脚本用空临时数据启动实际安装包，不继承模型配置；检查包内 Node 依赖及 peer 闭包、后端健康、内置 MCP、空列表、真实渲染与桥、凭据读写删除、审查程序和原生 dsh。AppImage 检查实际解压资源。临时本机 DevTools 端口与后台渲染开关仅用于检查，结束后清理测试进程及数据。见[验证记录](RELEASE_VALIDATION.zh-CN.md)。
 
 提交前执行 `python scripts/publication_audit.py`。安装包和 `SHA256SUMS.txt` 属于 Release 附件，不纳入源码。手动桌面工作流可构建 Windows/Linux 而不发布。
-
-官方仓库：[Micro-Multi](https://github.com/LKDenchin/Micro-Multi)。已有 v0.1.0 附件保持原发布基线，本次源码更新不创建标签或 Release，见[当前变化](CURRENT_CHANGES.zh-CN.md)。

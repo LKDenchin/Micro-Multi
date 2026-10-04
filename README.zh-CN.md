@@ -1,136 +1,94 @@
 <div align="center">
-  <img src="src/masp/web/micro-multi.svg" alt="Micro-Multi" width="96" />
+  <img src="src/masp/web/micro-multi.svg" alt="Micro-Multi" width="88" />
   <h1>Micro-Multi</h1>
-  <p><strong>让一支 AI Agent 团队，在你的本地工作区协作。</strong></p>
+  <p>在本地项目中与 AI 智能体一起工作。</p>
   <p><a href="README.md">English</a> · 简体中文</p>
-  <p><a href="https://lkdenchin.github.io/Micro-Multi/zh/">官网</a> · <a href="#快速安装">安装</a> · <a href="#开始使用">开始使用</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme-zh-cn.html">文档</a> · <a href="CONTRIBUTING.zh-CN.md">参与贡献</a></p>
-  <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
+  <p><a href="https://lkdenchin.github.io/Micro-Multi/zh/">官网</a> · <a href="#安装">安装</a> · <a href="#完成第一个任务">开始使用</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme-zh-cn.html">文档</a></p>
 </div>
 
-Micro-Multi 将对话、代码、工具和 Agent 团队放进同一个桌面工作台。描述你想完成的任务，主 Agent 先提交团队方案供你审核，确认后启动专业成员、跟踪并行任务并审查结果。
+Micro-Multi 是一个用于本地项目的 AI 桌面应用。连接模型服务、打开项目后，你可以让智能体阅读代码、修改文件、运行命令，或调用已经启用的工具。对话、文件浏览、代码差异和工具输出都能在应用内查看。
 
-连接自己的 OpenAI 兼容模型接口，为不同 Agent 选择模型，直接使用本地 Git 项目。你可以跟踪每个成员的操作、查看文件改动，并保留对话，在下一次打开应用时继续工作。
+小范围改动可以只交给主智能体。需要多人分工时，选择多智能体协作：主智能体先提出方案，你检查成员和任务安排，确认后再启动团队。执行过程中可以查看每个成员的进展，完成后对照项目文件检查结果。
 
+应用支持 Windows 和 Linux，提供中文、英文界面。模型接口和凭据由你配置；Skills、MCP 服务以及 deepseek-harness（dsh）生态插件可以补充指令和工具。
 
-**兼容 deepseek-harness（dsh）插件体系。** Micro-Multi 原生运行 dsh Cordis Host 插件，让插件工具直接参与桌面工作区中主 Agent 与专业成员的协作。
+## 可以用来做什么
 
-| | 你可以做什么 |
+| 任务 | 使用方式 |
 | --- | --- |
-| **dsh 插件体系兼容** | 加载原生 deepseek-harness Cordis Host 扩展包，支持工具注册、服务与依赖注入、事件和生命周期管理。 |
-| **一起工作的团队** | 向专业成员委派任务，并行推进独立工作，按完成顺序收集报告。 |
-| **自由选择模型** | 配置兼容 API 地址、检测连接，为每个 Agent 选择模型。 |
-| **看得见的工作区** | 集中浏览项目、文件、改动、审查、预览、终端输出和工具记录。 |
-| **可以继续的对话** | 本地保存流式回复和任务历史，恢复工作，并在会话增长时压缩上下文。 |
-| **可以扩展的工具** | 添加 Skills、MCP 服务、本地命令插件与 Cordis Host 扩展包。 |
-| **随时掌握控制权** | 选择权限、检查操作请求、暂停工作或停止当前执行。 |
-| **适合日常工作的桌面应用** | 粘贴附件、选择项目目录，切换中英文、明暗主题与布局。 |
+| 了解代码库 | 让智能体追踪程序入口、解释模块，或找出某项功能涉及的文件。 |
+| 修改代码并验证 | 直接在项目目录中工作，查看改动差异以及命令、测试的输出。 |
+| 拆分较大的任务 | 让不同成员负责实现、测试或审查，并为他们选择模型。 |
+| 接入外部工具 | 配置 MCP 服务、安装 dsh 插件，或用 Skill 保存常用的工作要求。 |
+| 继续之前的工作 | 重新打开对话，查看消息、工具记录和成员报告，再接着处理。 |
 
----
+## 安装
 
-## 当前源码更新
+在 [GitHub Releases](https://github.com/LKDenchin/Micro-Multi/releases/latest) 下载对应系统的软件包。
 
-2026-10-05 源码更新保留包版本 0.1.0，不发布新安装包或 Release。现有下载仍为已发布基线，使用本次变化需运行或构建当前源码。参见[当前变化](docs/CURRENT_CHANGES.zh-CN.md)及[更新记录](CHANGELOG.zh-CN.md)。
-
-- 原生 Cordis Loader 与 ClientModuleSystem 统一解析声明的服务/客户端依赖、缺失库和包内构建工具。
-- 插件设置仅在详情显示；Schema 表单及原始命名空间设置 API 校验、持久化并恢复配置，运行时源码版本使旧客户端/宿主缓存失效。
-- 浏览器兼容构建、WebSocket 订阅和受限 portal 改善插件加载与启动。
-- 每版团队方案单独确认，保留成员选定模型；模型参数协商、具体错误诊断及持久化流合并改善执行。
-
----
-
-## 快速安装
-
-在 [Releases 页面](https://github.com/LKDenchin/Micro-Multi/releases/latest) 下载对应系统的软件包。自行构建请参考[桌面构建指南](docs/DESKTOP_RELEASE.zh-CN.md)。
-
-| 平台 | 下载 |
+| 系统 | 软件包 |
 | --- | --- |
-| Windows x64 | [Micro-Multi-Setup-0.1.0-x64.exe](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
-| Debian / Ubuntu x64 | [Micro-Multi-0.1.0-amd64.deb](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |
-| Linux x64 AppImage | [Micro-Multi-0.1.0-x86_64.AppImage](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-x86_64.AppImage) |
-| SHA-256 | [SHA256SUMS.txt](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/SHA256SUMS.txt) |
+| Windows x64 | [NSIS 安装程序](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-Setup-0.1.0-x64.exe) |
+| Debian / Ubuntu x64 | [Debian 包](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-amd64.deb) |
+| Linux x64 | [AppImage](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/Micro-Multi-0.1.0-x86_64.AppImage) |
+| 校验和 | [SHA256SUMS.txt](https://github.com/LKDenchin/Micro-Multi/releases/download/v0.1.0/SHA256SUMS.txt) |
 
-### Windows
+Windows 运行安装程序，然后从开始菜单打开 Micro-Multi。Debian 或 Ubuntu 使用 `sudo apt install ./<package>.deb` 安装下载的包。AppImage 先执行 `chmod +x <file>.AppImage`，再运行该文件；没有 FUSE 时可加上 `--appimage-extract-and-run`。
 
-运行 `Micro-Multi-Setup-0.1.0-x64.exe`，选择安装目录，然后从开始菜单启动 Micro-Multi。
+安装包内置 Python 和 Node.js。仓库操作需要另外安装 Git，Docker 和插件所需的外部 CLI 也按需安装。[桌面指南](docs/DESKTOP_RELEASE.zh-CN.md)介绍 Linux 凭据库、Ubuntu AppImage 配置、校验和及自行构建的方法。
 
-### Linux — Debian / Ubuntu
+## 完成第一个任务
 
-```bash
-sudo apt install ./Micro-Multi-0.1.0-amd64.deb
-micro-multi
-```
+1. 打开**设置 → 模型 → 添加或编辑模型**，填写名称、API 地址、模型 ID 和密钥，然后点击“检测连接”。
+2. 添加本地项目目录。保留“**直接关联此目录**”勾选项，即可在原目录中工作；没有 Git 的目录会自动初始化仓库。
+3. 在该项目中新建对话，选择模型、**仅主智能体**模式和允许的操作权限。
+4. 说明要修改什么，以及怎样检查。例如：
 
-### Linux — AppImage
+   ```text
+   找到订单列表接口，添加分页，并保留现有响应字段。
+   运行相关测试，说明是否通过；如果失败，解释原因。
+   ```
 
-```bash
-chmod +x Micro-Multi-0.1.0-x86_64.AppImage
-./Micro-Multi-0.1.0-x86_64.AppImage
-```
+5. 阅读回复，打开改动的文件并查看差异。命令输出保存在工具记录中；需要调整时，直接在对话里补充要求。
 
-没有 FUSE 时，可添加 `--appimage-extract-and-run` 运行。
+你可以向对话添加附件，也可以打开右侧工作区查看文件、审查、预览和终端活动。[项目与对话](docs/WORKSPACE.zh-CN.md)介绍主要操作，[模型配置](docs/MODELS.zh-CN.md)说明接口连接方式。
 
-Ubuntu 24.04 及以上系统，请按 [AppImage 安装指南](docs/DESKTOP_RELEASE.zh-CN.md#ubuntu-appimage-沙箱策略)启用应用专用的用户命名空间策略。
+## 使用团队协作
 
-桌面包内置 Python 和 Node。Git 仓库操作需要安装 Git；Docker 和外部扩展工具按需另行安装。Linux 模型密钥存储需要正在运行的 Secret Service 凭据库，例如 GNOME Keyring。下载后对照 `SHA256SUMS.txt` 校验；当前 Windows 安装包未签名。
+任务涉及不同职责时，在输入区选择多智能体协作。主智能体会准备方案，列出成员职责、任务、负责文件和模型。通过“**调整团队**”修改安排，再点击“**确认执行**”启动这版方案。新任务或新一轮反馈需要重新确认。
 
----
+成员默认跟随主模型，也可以单独选择其他模型。团队视图显示状态和报告，工具记录展示实际执行的操作。运行中可以补充说明、暂停对话或停止执行。验收时应查看改动和测试输出；具体流程见[团队协作](docs/AUTONOMOUS_COLLABORATION.zh-CN.md)。
 
-## 开始使用
+## 添加指令和工具
 
-1. **连接模型。** 在“模型”中输入 API 地址、模型 ID 和密钥，检测连接。
-2. **打开项目。** 新建项目或导入本地 Git 仓库。
-3. **描述目标。** 创建对话，例如：“给这个 API 添加分页，并验证行为。”
-4. **审核团队方案。** 选择多 Agent 协作，调整职责和模型，确认当前方案后才启动成员；也可只使用主 Agent。
-5. **检查结果。** 查看文件改动、工具记录、审查和验证，再使用交付内容。
+在“**自定义**”中管理扩展。
 
-你可以调整成员模型和职责、添加附件，并通过后续对话给出反馈。项目和对话保存在本地，关闭应用后仍可继续。
-
----
-
-## 模型与扩展
-
-使用兼容 OpenAI Chat Completions 的接口。Micro-Multi 将模型配置中的密钥存入系统凭据库，应用不附带任何模型凭据。
-
-Skills 为 Agent 提供可复用的工作指令。项目技能可从 `.agents/skills/` 发现，也可以通过工作台添加用户技能。MCP 服务和插件连接额外工具；在设置中安装可信扩展，并检查它们请求的权限。
-
-详见[自主协作](docs/AUTONOMOUS_COLLABORATION.zh-CN.md)和[扩展指南](docs/NATIVE_CORDIS.zh-CN.md)。
-
----
-
-## deepseek-harness 插件体系
-
-Micro-Multi 使用官方 dsh Cordis 与工具运行时。在“自定义 → 插件”加载已构建的 dsh Cordis Host 插件包后，主 Agent 和专业成员都可以使用其工具。插件可注册服务、注入依赖、校验配置与工具参数、发布事件，并在禁用或移除时释放资源。
-
-每个插件包在工作区内保持独立状态。宿主提供 `tools`、`systemPrompt` 和 `microMulti` 服务，`microMulti.workspace` 与 `microMulti.pluginRoot` 分别提供工作区和插件目录。开发插件时，可使用这些宿主服务。
-
-可以直接体验仓库中的 [`examples/native-cordis`](examples/native-cordis)，或按照 [dsh 插件指南](docs/NATIVE_CORDIS.zh-CN.md)加载自己的插件包。插件框架详见 [dsh 仓库](https://github.com/deepseek-ai/deepseek-harness)。
-
----
-
-## 工作区速查
-
-| 操作 | 入口 |
+| 扩展 | 用途 |
 | --- | --- |
-| 添加模型或检测连接 | 模型 |
-| 创建或导入项目 | 项目导航 |
-| 创建或重新打开对话 | 对话列表 |
-| 选择协作模式或模型 | 对话输入区 |
-| 跟踪成员操作 | 团队视图与工具记录 |
-| 检查文件、改动、审查和终端 | 工作区检查面板 |
-| 添加 Skills、MCP 或插件 | 设置 / 扩展 |
-| 修改语言、主题或布局 | 设置 |
+| Skills | 在 `SKILL.md` 中保存可复用的工作指令。项目技能放在 `.agents/skills/`。 |
+| MCP 服务 | 接入本地或远程服务提供的工具。 |
+| dsh 插件 | 使用 deepseek-harness 生态中的工具、模型提供者和界面组件。 |
+| 命令插件 | 调用本地命令实现的工具。 |
 
----
+安装后打开插件详情配置参数。有些插件需要先填写账号、API 密钥或安装外部程序，才能使用其工具。输入区的 **+** 菜单列出已启用能力。选择扩展类型可参考[扩展指南](docs/extensions.zh-CN.md)，安装或开发 dsh 插件可参考[dsh 指南](docs/NATIVE_CORDIS.zh-CN.md)。
+
+## 权限和数据
+
+输入区提供三种权限：“**请求批准**”在修改文件和运行命令前询问；“**帮我批准**”允许修改文件，运行命令仍需确认；“**完全访问**”允许文件操作、命令和已启用的外部工具。[权限说明](docs/sandbox.zh-CN.md)介绍这些设置的作用。
+
+项目记录、对话和附件保存在本地。请求模型时会发送任务需要的上下文，启用的扩展也可能向其服务发送数据。模型配置中的 API 密钥使用系统凭据库保存。本地命令和原生插件以你的系统用户权限运行。
+
+安装版数据位于 Windows 的 `%APPDATA%\Micro-Multi\data`，或 Linux 的 `${XDG_CONFIG_HOME:-~/.config}/Micro-Multi/data`。源码模式默认使用工作目录下的 `.masp`，可通过 `MASP_HOME` 指定其他位置。升级和卸载保留数据，备份时应将数据目录与应用程序分开处理。
 
 ## 从源码运行
 
-需要 Python 3.11+、Node.js 24+、npm 和 Git。在仓库根目录执行：
+准备 Python 3.11+、Node.js 24+、npm 和 Git，在仓库根目录执行：
 
 ```bash
 python -m venv .venv
 ```
 
-Linux/macOS 执行 `source .venv/bin/activate` 激活环境；Windows PowerShell 执行 `.\.venv\Scripts\Activate.ps1`，然后运行：
+Windows PowerShell 使用 `.\.venv\Scripts\Activate.ps1` 激活虚拟环境，Linux 使用 `source .venv/bin/activate`。随后执行：
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -138,52 +96,26 @@ npm ci
 npm run desktop
 ```
 
-使用浏览器时，执行 `python -m masp.cli serve`，打开 <http://127.0.0.1:3080/>。
+如果使用浏览器，运行 `python -m masp.cli serve`，然后访问 `http://127.0.0.1:3080/`。配置和数据目录见[部署指南](docs/deployment.zh-CN.md)。
 
-| 设置 | 用途 |
+## 技术栈
+
+| 部分 | 实现 |
 | --- | --- |
-| `MASP_HOME` | 指定本地数据目录；源码运行默认使用 `.masp` |
-| `MASP_PORT` | 桌面后端端口，默认 `3080` |
-| `MASP_MODEL_BASE_URL` | 可选的环境变量模型 API 地址 |
-| `MASP_MODEL_NAME` | 可选的环境变量模型 ID |
-| `MASP_MODEL_API_KEY` | 可选模型密钥，不应提交到仓库 |
+| 桌面应用 | Electron，使用沙箱渲染进程及桌面操作 preload 桥。 |
+| 后端 | Python、FastAPI、Uvicorn 和 Pydantic，负责本地接口与智能体执行。 |
+| 界面 | HTML、CSS 和 JavaScript；原生插件组件由 React 渲染。 |
+| 智能体与插件运行时 | Node.js、Cordis 和 deepseek-harness 软件包。 |
+| 存储 | SQLite 保存应用记录，本地文件保存附件，系统凭据库保存模型密钥。 |
+| 通信 | HTTP 接口、对话事件 SSE 流，以及插件订阅 WebSocket。 |
+| 构建与文档 | electron-builder、esbuild，以及由 Markdown 生成的静态网站。 |
 
-安装版数据默认位于 Windows 的 `%APPDATA%\Micro-Multi\data` 或 Linux 的 `${XDG_CONFIG_HOME:-~/.config}/Micro-Multi/data`。更新和卸载保留用户数据。
+[架构说明](docs/architecture.zh-CN.md)介绍各部分如何通信，以及对应的源码目录。
 
----
+## 文档与参与贡献
 
-## 文档
+开始使用时，可以依次阅读[模型配置](docs/MODELS.zh-CN.md)、[项目与对话](docs/WORKSPACE.zh-CN.md)、[团队协作](docs/AUTONOMOUS_COLLABORATION.zh-CN.md)和[扩展](docs/extensions.zh-CN.md)。遇到问题时，参见[常见问题](docs/TROUBLESHOOTING.zh-CN.md)。
 
-| 指南 | 内容 |
-| --- | --- |
-| [桌面构建与发布](docs/DESKTOP_RELEASE.zh-CN.md) | 构建安装包、运行检查和发布 |
-| [自主协作](docs/AUTONOMOUS_COLLABORATION.zh-CN.md) | 任务委派、并行工作、进度和审查 |
-| [扩展](docs/NATIVE_CORDIS.zh-CN.md) | Cordis Host 包与可运行示例 |
-| [持久化与恢复](docs/DURABLE_TURNS_AND_MODEL_RECOVERY.zh-CN.md) | 保存对话、中断和恢复 |
-| [安全](SECURITY.zh-CN.md) | 数据、命令权限和漏洞报告 |
-| [贡献指南](CONTRIBUTING.zh-CN.md) | 开发环境、检查和 Pull Request |
-| [更新记录](CHANGELOG.zh-CN.md) | 版本历史 |
+可复现的问题提交到 [Issues](https://github.com/LKDenchin/Micro-Multi/issues)，附上操作步骤和脱敏日志；使用讨论和建议可放在 [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions)。贡献代码前请阅读[贡献指南](CONTRIBUTING.zh-CN.md)，安全漏洞通过[安全政策](SECURITY.zh-CN.md)中的私密渠道报告。
 
----
-
-## 参与贡献
-
-欢迎贡献修复、测试、翻译、文档和扩展。请阅读[贡献指南](CONTRIBUTING.zh-CN.md)和[行为准则](CODE_OF_CONDUCT.zh-CN.md)，并说明实际执行的验证。
-
-```bash
-python -m pytest -q
-python -m ruff check src tests scripts
-python -m mypy src/masp
-```
-
-## 社区
-
-通过[Issues](https://github.com/LKDenchin/Micro-Multi/issues) 报告可复现的问题或提出功能建议，提供版本、系统、复现步骤和脱敏日志。交流使用方法与想法可前往 [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions)。漏洞采用[安全政策](SECURITY.zh-CN.md)中的私密渠道。
-
-会话和上传内容保存在本地，但配置的模型服务和启用的扩展可能接收执行任务所需的上下文。本地命令在你的机器运行，权限检查不等于操作系统沙箱。
-
----
-
-## 许可证
-
-[Apache-2.0](LICENSE)。第三方组件保留各自许可证和声明，详见 [NOTICE](NOTICE)及[运行时来源](docs/UPSTREAM_RUNTIME_PROVENANCE.zh-CN.md)。
+Micro-Multi 使用 [Apache-2.0](LICENSE) 许可证。第三方组件保留各自许可证，参见 [NOTICE](NOTICE) 和[运行时溯源](docs/UPSTREAM_RUNTIME_PROVENANCE.zh-CN.md)。

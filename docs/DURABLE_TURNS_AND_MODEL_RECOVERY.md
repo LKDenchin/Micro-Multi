@@ -1,11 +1,15 @@
-# Conversations, streaming and model recovery
+# Saving and resuming work
 
-Projects, conversations, tool events and streamed replies are stored in the local data directory. Reopen a saved conversation to continue work. Context compaction retains task information and loop-detection state for longer sessions.
+Micro-Multi saves conversations and tool events in the local data directory. When you reopen the app, select a conversation from the list to read its messages and continue. Longer conversations may be compacted to keep the working context within the model's limit.
 
-Stream events are coalesced while preserving semantic boundaries and final status. Batched persistence, incremental replay, scheduled Markdown rendering and merged directory refreshes reduce repeated work. SQLite retains WAL and full synchronization. MCP discovery is cached, connections are reused, and cancellation cleans up active calls.
+## Pause or stop
 
-Compatible model requests accept SSE or JSON replies, text content blocks, reasoning fields and structured tool arguments. When a provider explicitly rejects an optional parameter before generation with HTTP 400/422, bounded negotiation removes that optional parameter or renames the token limit when the provider identifies the replacement. Messages, tools, model selection and authentication remain mandatory. Negotiation is cached per endpoint/model.
+Pause an active conversation when you want to inspect its state before continuing. Stop ends the current execution and preserves the content already recorded. Neither action undoes file edits or commands that have finished.
 
-Stopping preserves recorded content. Network failures and truncation retain their actual cause; unfinished output is not marked as successful. Check endpoint, network and credentials, then continue the existing conversation. Inspect files and tool records before repeating operations with side effects.
+After stopping, read the tool records and inspect the project before giving the next instruction. If a command changed files, started a process or contacted a service, check its actual outcome before asking the agent to repeat it.
 
-The desktop monitors backend exits and renderer state, records diagnostics and restores the workspace. Logs are in the application data directory; redact secrets before sharing. See [deployment](deployment.md) for storage paths and [current changes](CURRENT_CHANGES.md) for this source update.
+## Recover after a failure
+
+A connection failure or truncated reply may leave a task unfinished. Check the error, model connection and output limits, then continue in the same conversation. State which part should resume and whether any work should be verified first. See [troubleshooting](TROUBLESHOOTING.md) for common connection problems.
+
+The desktop records diagnostics when the backend or renderer exits. These logs live in the application data directory. Back up that directory separately from the program, and redact credentials and private content before sharing logs. Storage locations are listed in [deployment](deployment.md).

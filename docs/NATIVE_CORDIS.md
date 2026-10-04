@@ -1,18 +1,24 @@
 # Native dsh plugins
 
-Micro-Multi runs published deepseek-harness plugins through the official Cordis Loader and ClientModuleSystem. Cordis 4.0.4 and the locked dsh 0.2.0-rc.1 runtime form the host SDK. Host tools are available to both the lead agent and team members. Micro-Multi mounts client contributions inside its own interface; it does not start a separate dsh WebUI.
+Micro-Multi supports packages from the deepseek-harness (dsh) ecosystem. A plugin can provide tools to agents, register a model provider or add controls to the app. Client contributions are displayed inside Micro-Multi; you do not need to run a separate dsh WebUI.
 
-## Install and build
+## Install and configure a plugin
 
-Open Customization, select a marketplace package, npm package, Git source or local directory, and review its source and requested access. The agent can also use `plugin_manager` to install an extension. Sources require a `package.json` and a supported host or client entry. Try [examples/native-cordis](../examples/native-cordis).
+Open Customization and select Plugins. Read the package description, choose an available source and install it. Sources can be marketplace entries, npm packages, Git repositories or local package directories. A local package needs a `package.json` and supported runtime entries. The agent's `plugin_manager` tool can also manage installation.
 
-Published JavaScript artifacts are loaded directly. A runtime activation error does not by itself trigger a rebuild. If artifacts need building, the reviewed build plan includes package-local development and optional dependencies before the build command, so tools such as Vite are available even when the surrounding npm environment omits development dependencies. Installing dependencies does not execute their lifecycle scripts; source builds remain subject to the application's existing approval flow.
+Published JavaScript entries load directly. If a source needs building, the application presents a build plan for review, including the local dependencies and build command. Confirm that plan to proceed. Dependencies declared by the package are prepared as part of loading; external CLIs and services follow the plugin's own setup instructions.
 
-The generic resolver reads npm dependencies, peer/dev declarations and `dsh.client.inject` metadata. Missing declared libraries go into an application-owned dependency cache. Package metadata remains discoverable when `package.json` is hidden by exports. Framework packages use the host SDK version or a compatible published version no newer than the host. Ordinary plugin dependencies retain their package declarations.
+Open the installed package's details to configure it. The page uses the plugin's own settings interface, or a form generated from its configuration schema. Save changes and check any validation message. If the plugin provides models, configure its provider and use its model controls where available. A package does not have to supply a tool to be useful.
 
-## Entries and service injection
+## Use and manage the package
 
-Single local entries can use `microMulti.cordis.entry` and `config`. Multiple entries can declare:
+Enabled tools are available to the lead agent and team members. Interface components appear in the regions the plugin contributes to, while its configuration stays in details. Check the conversation's tool record to see what an agent called.
+
+Disable a package to remove its active contributions, or uninstall it from the installed list. Plugins may use your filesystem, run programs or contact services under your system account. Review the package before installing it and keep its credentials private.
+
+## Develop a local plugin
+
+Start with [examples/native-cordis](../examples/native-cordis). A package can use a standard runtime export, or declare a local entry and configuration in `microMulti.cordis`. Several entries can be declared together:
 
 ```json
 {
@@ -29,26 +35,8 @@ Single local entries can use `microMulti.cordis.entry` and `config`. Multiple en
 }
 ```
 
-Entries stay inside the package root. ESM/CJS exports, configuration validation and native Loader entry IDs are preserved. Bundle entry options, isolation, interception, disabled state and expressions follow the native Loader lifecycle.
+Keep entries within the package and declare their dependencies. Host services include `tools`, `systemPrompt` and `microMulti`; `microMulti.workspace` and `microMulti.pluginRoot` identify the workspace and source locations. Use native Cordis APIs for service injection, events and resource disposal. Tool arguments and results follow the official dsh tool runtime.
 
-The host resolves required services recursively from the official dsh base composition and provider metadata. This includes `timer`, `sessionQuery`, `workspaceRegistry` and configured storage backends. Providers activate on demand; the host does not eagerly execute an entire plugin catalogue. Missing real providers and startup errors produce a concrete diagnostic and roll back failed activation.
+Client packages declare their entries and dependencies through dsh metadata. Their modules use the official client module system and shared renderer. Source-mode hosting requires Node.js 24+; desktop packages supply it. `MICRO_MULTI_NODE` can select another runtime.
 
-The application provides `tools`, `systemPrompt` and `microMulti`; `microMulti.workspace` and `microMulti.pluginRoot` expose the corresponding paths. Tools use the official dsh parameter validation and structured output. Register services, events and effects with native Cordis APIs. Disable, reinstall, removal and normal shutdown dispose resources.
-
-## Settings and client pages
-
-A plugin's own settings contributions appear in its details page. A declared Config schema can generate an editable form when the plugin has no custom settings page. Forms use native settings remotes, support ordinary fields and JSON for complex values, and preserve secret-field behavior. Validation and complete lifecycle restart succeed before atomic persistence; failed changes restore the prior configuration.
-
-Legacy namespace settings use the original published SettingsProvider, supporting `get`, `register`, watch/update/mutate and revision conflicts alongside the current Config forms. Previous saved namespace values are migrated on read. See [runtime provenance](UPSTREAM_RUNTIME_PROVENANCE.md).
-
-Client factories, synchronous and asynchronous requires, chunk registration and caches use ClientModuleSystem. Dependency and child-slot discovery uses JavaScript syntax analysis. Native parent components own their declared child slots. Settings slots and body portals are contained in plugin details; conversation and explicit shell contributions are mounted in their respective application regions. Native locale and renderer services provide the actual client interfaces.
-
-Browser bundles disable Node-internal probes instead of relying on a browser `process` global. Client JS/CSS and host reuse incorporate runtime source and lock-file revisions, invalidating stale assets after upgrades. Persistent plugin subscriptions use WebSocket so they do not exhaust the browser HTTP connection pool. Native HTTP routes preserve streaming, binary bodies and response headers.
-
-## Runtime, permissions and diagnostics
-
-Package/workspace hosts are separate Node processes with bounded startup/call time and logs. A terminated host is recreated on a later explicit call. Data and dependency caches belong to Micro-Multi, independently of an external dsh installation. Source operation needs Node.js 24+; desktop packages supply Node. `MICRO_MULTI_NODE` can select another runtime.
-
-Plugins run with the current user's system permissions. Process separation and integrity-verified framework source snapshots protect host stability; they are not an OS sandbox for arbitrary plugin code. External CLIs, account login, provider credentials and network services still require their own setup. Do not treat successful installation as verification of every remote provider operation.
-
-See [extensions](extensions.md), [current changes](CURRENT_CHANGES.md) and [security](../SECURITY.md). Framework reference: [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness).
+See [architecture](architecture.md), [runtime interfaces](contracts.md) and [upstream provenance](UPSTREAM_RUNTIME_PROVENANCE.md) for implementation references. The upstream framework is [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness).

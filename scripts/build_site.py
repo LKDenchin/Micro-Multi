@@ -18,26 +18,54 @@ SITE = "https://lkdenchin.github.io/Micro-Multi/"
 REPO = "https://github.com/LKDenchin/Micro-Multi"
 GUIDE_PAIRS = {
     "README.md": ("Getting started", "开始使用"),
-    "docs/CURRENT_CHANGES.md": ("Current source changes", "当前源码变化"),
+    "PRODUCT_DEVELOPMENT_SPEC.md": ("Task examples", "任务示例"),
+    "docs/MODELS.md": ("Model configuration", "模型配置"),
+    "docs/WORKSPACE.md": ("Projects and conversations", "项目与对话"),
+    "docs/AUTONOMOUS_COLLABORATION.md": ("Team collaboration", "团队协作"),
+    "docs/extensions.md": ("Skills, MCP and plugins", "Skills、MCP 与插件"),
     "docs/NATIVE_CORDIS.md": ("Native dsh plugins", "原生 dsh 插件"),
-    "docs/AUTONOMOUS_COLLABORATION.md": ("Reviewed team collaboration", "经审核的团队协作"),
-    "docs/DURABLE_TURNS_AND_MODEL_RECOVERY.md": ("Conversations and recovery", "对话与恢复"),
-    "docs/architecture.md": ("Architecture", "架构"),
-    "docs/extensions.md": ("Extensions and tools", "扩展与工具"),
-    "docs/deployment.md": ("Local deployment", "本地部署"),
-    "docs/contracts.md": ("Runtime interfaces", "运行时接口"),
-    "docs/sandbox.md": ("Execution and permissions", "执行与权限"),
-    "docs/replay.md": ("Session history", "会话历史"),
+    "docs/sandbox.md": ("Permissions", "权限"),
+    "docs/DURABLE_TURNS_AND_MODEL_RECOVERY.md": ("Saving and resuming work", "保存与继续工作"),
+    "docs/replay.md": ("Conversation history", "对话记录"),
+    "docs/TROUBLESHOOTING.md": ("Troubleshooting", "常见问题"),
+    "docs/architecture.md": ("Architecture and technology", "架构与技术栈"),
+    "docs/deployment.md": ("Run from source", "源码部署"),
     "docs/DESKTOP_RELEASE.md": ("Desktop installation and builds", "桌面安装与构建"),
-    "docs/RELEASE_NOTES.md": ("Release notes", "发布说明"),
-    "docs/RELEASE_VALIDATION.md": ("Historical release validation", "历史发布验证"),
+    "docs/contracts.md": ("Runtime interfaces", "运行时接口"),
     "docs/UPSTREAM_RUNTIME_PROVENANCE.md": ("Runtime provenance", "运行时溯源"),
     "CONTRIBUTING.md": ("Contributing", "贡献指南"),
     "SECURITY.md": ("Security", "安全政策"),
     "CODE_OF_CONDUCT.md": ("Community conduct", "社区规范"),
-    "CHANGELOG.md": ("Changelog", "更新记录"),
-    "PRODUCT_DEVELOPMENT_SPEC.md": ("Product guide", "产品指南"),
 }
+GUIDE_SECTIONS = [
+    (
+        ("Start here", "入门"),
+        ["README.md", "PRODUCT_DEVELOPMENT_SPEC.md", "docs/MODELS.md", "docs/WORKSPACE.md"],
+    ),
+    (
+        ("Using the app", "使用指南"),
+        [
+            "docs/AUTONOMOUS_COLLABORATION.md",
+            "docs/extensions.md",
+            "docs/NATIVE_CORDIS.md",
+            "docs/sandbox.md",
+            "docs/DURABLE_TURNS_AND_MODEL_RECOVERY.md",
+            "docs/replay.md",
+            "docs/TROUBLESHOOTING.md",
+        ],
+    ),
+    (
+        ("Development", "开发与部署"),
+        [
+            "docs/architecture.md",
+            "docs/deployment.md",
+            "docs/DESKTOP_RELEASE.md",
+            "docs/contracts.md",
+            "docs/UPSTREAM_RUNTIME_PROVENANCE.md",
+        ],
+    ),
+    (("Project", "项目"), ["CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md"]),
+]
 
 
 def localized_source(source: str, chinese: bool) -> str:
@@ -83,52 +111,129 @@ def page(
 <a class="brand" href="{home}"><img src="{BASE}assets/micro-multi.svg" width="34" height="34" alt=""><span>Micro-Multi</span></a>
 <div class="navlinks"><a href="{docs}">{"文档" if chinese else "Docs"}</a><a href="{REPO}/releases/latest">{"下载" if chinese else "Download"}</a><a href="{REPO}">GitHub ↗</a><a class="language" href="{alternate}">{"English" if chinese else "简体中文"}</a></div>
 </nav></header><main id="content">{body}</main>
-<footer class="footer"><a class="brand" href="{home}">Micro-Multi</a><p>{"在本地，让 Agent 团队一起工作。" if chinese else "A local workspace for your agent team."}</p>
-<div><a href="{doc_url(localized_source("CONTRIBUTING.md", chinese))}">{"参与贡献" if chinese else "Contribute"}</a><a href="{doc_url(localized_source("SECURITY.md", chinese))}">{"安全" if chinese else "Security"}</a><a href="{REPO}/discussions">{"社区" if chinese else "Community"}</a><a href="{REPO}/blob/main/LICENSE">Apache-2.0</a></div><small>© 2026 LKDenchin · Micro-Multi contributors</small></footer></body></html>'''
+<footer class="footer"><a class="brand" href="{home}">Micro-Multi</a><p>{"在本地项目中使用 AI 智能体。" if chinese else "AI agents for your local projects."}</p>
+<div><a href="{doc_url(localized_source("CONTRIBUTING.md", chinese))}">{"参与贡献" if chinese else "Contribute"}</a><a href="{doc_url(localized_source("SECURITY.md", chinese))}">{"安全" if chinese else "Security"}</a><a href="{REPO}/discussions">{"社区" if chinese else "Community"}</a><a href="{REPO}/blob/main/LICENSE">Apache-2.0</a></div><small>© 2026 LKDenchin · {"Micro-Multi 贡献者" if chinese else "Micro-Multi contributors"}</small></footer></body></html>'''
 
 
 def landing(chinese: bool) -> str:
     def t(en: str, zh: str) -> str:
         return zh if chinese else en
 
-    readme = doc_url("README.zh-CN.md" if chinese else "README.md")
+    def guide(source: str) -> str:
+        return doc_url(localized_source(source, chinese))
+
     features = [
         (
-            "01",
-            t("One task. A whole team.", "一个任务，一支团队。"),
+            t("Read and edit a project", "阅读和修改项目"),
             t(
-                "Review and confirm a team plan, then follow specialists and inspect their results.",
-                "审核并确认团队方案，再跟踪专业成员并检查交付结果。",
+                "Open a local folder, ask about the code and make changes. Browse files and inspect the Git diff in the same app.",
+                "打开本地目录，让智能体解释代码或修改文件，再在应用中浏览内容、查看 Git 差异。",
             ),
         ),
         (
-            "02",
-            t("Your models. Your workspace.", "你的模型，你的工作区。"),
+            t("Run commands and tests", "运行命令和测试"),
             t(
-                "Connect compatible model endpoints and work directly with your local Git projects.",
-                "连接兼容的模型接口，直接使用本地 Git 项目，为不同成员选择模型。",
+                "Let the agent use your project's tools. Read the command output to check what ran and whether it succeeded.",
+                "让智能体调用项目自己的工具，查看命令输出，确认执行了什么、结果是否通过。",
             ),
         ),
         (
-            "03",
-            t("Tools that grow with you.", "随工作一起扩展的工具。"),
+            t("Divide work among agents", "安排团队分工"),
             t(
-                "Bring Skills, MCP tools, command plugins and native dsh packages into your workflow.",
-                "将 Skills、MCP 工具、本地命令插件和原生 dsh 扩展带入日常工作。",
+                "Review a plan for implementation, tests and review. Choose member models, confirm the plan and follow their work.",
+                "检查实现、测试和审查的分工，为成员选择模型，确认方案后跟踪各自的任务。",
             ),
         ),
         (
-            "04",
-            t("Follow every step.", "看见每一步。"),
+            t("Continue a conversation", "继续已有对话"),
             t(
-                "Keep conversations, inspect changes and tool records, and resume work across sessions.",
-                "保存对话，查看文件改动、工具记录与验证结果，在下次打开时继续工作。",
+                "Reopen saved messages, tool calls and member reports. Send a follow-up when the work needs another change.",
+                "重新打开保存的消息、工具调用和成员报告，需要调整时直接补充要求。",
             ),
         ),
     ]
     cards = "".join(
-        f'<article class="feature"><span class="number">{n}</span><h3>{title}</h3><p>{text}</p></article>'
-        for n, title, text in features
+        f'<article class="feature"><span class="number">{i:02}</span><h3>{title}</h3><p>{copy}</p></article>'
+        for i, (title, copy) in enumerate(features, 1)
+    )
+    steps = [
+        (
+            t("Connect a model", "连接模型"),
+            t(
+                "In Settings → Models, add the API base URL, model ID and key. Test the connection before starting.",
+                "在“设置 → 模型”添加 API 地址、模型 ID 和密钥，开始前测试连接。",
+            ),
+        ),
+        (
+            t("Open a local folder", "打开本地目录"),
+            t(
+                "Add your project and choose whether to link the original directory. Check the path before confirming.",
+                "添加项目，选择是否直接关联原目录，确认前检查路径。",
+            ),
+        ),
+        (
+            t("Describe the task", "说明任务"),
+            t(
+                "Choose a model, mode and permissions. Say what should change and which checks should be run.",
+                "选择模型、模式和权限，说明修改目标，以及应该运行的检查。",
+            ),
+        ),
+        (
+            t("Inspect the result", "检查结果"),
+            t(
+                "Read the reply, diff and test output. Continue in the same conversation if anything needs adjustment.",
+                "阅读回复、差异和测试输出，需要调整时在原对话中继续。",
+            ),
+        ),
+    ]
+    step_cards = "".join(
+        f"<article><span>{i:02}</span><h3>{title}</h3><p>{copy}</p></article>"
+        for i, (title, copy) in enumerate(steps, 1)
+    )
+    stack = [
+        (
+            t("Desktop", "桌面"),
+            "Electron",
+            t("Folder selection and desktop integration.", "目录选择与桌面集成。"),
+        ),
+        (
+            t("Backend", "后端"),
+            "Python · FastAPI",
+            t("Local APIs, conversations and task execution.", "本地接口、对话与任务执行。"),
+        ),
+        (
+            t("Interface", "界面"),
+            "HTML · CSS · JavaScript",
+            t(
+                "The main workspace; React for native plugin components.",
+                "主工作区；React 渲染原生插件组件。",
+            ),
+        ),
+        (
+            t("Agent and plugin runtime", "智能体与插件运行时"),
+            "Node.js · Cordis · dsh",
+            t("Native tools, services and plugin contributions.", "原生工具、服务及插件贡献。"),
+        ),
+        (
+            t("Storage", "存储"),
+            "SQLite · keyring",
+            t(
+                "Local records and OS-backed model credentials.",
+                "本地记录与系统凭据库中的模型密钥。",
+            ),
+        ),
+        (
+            t("Connections", "通信"),
+            "HTTP · SSE · WebSocket",
+            t(
+                "API calls, streamed replies and plugin subscriptions.",
+                "接口请求、流式回复与插件订阅。",
+            ),
+        ),
+    ]
+    stack_cards = "".join(
+        f"<div><span>{label}</span><h3>{technology}</h3><p>{copy}</p></div>"
+        for label, technology, copy in stack
     )
     downloads = [
         ("Windows", "x64 · NSIS", "Micro-Multi-Setup-0.1.0-x64.exe"),
@@ -139,44 +244,23 @@ def landing(chinese: bool) -> str:
         f'<a class="download-card" href="{REPO}/releases/download/v0.1.0/{asset}"><span>{system}</span><small>{kind}</small><b>{t("Download", "下载")} ↗</b></a>'
         for system, kind, asset in downloads
     )
-    steps = [
-        (
-            t("Connect a model", "连接模型"),
-            t("Add your endpoint, model and key.", "添加接口地址、模型与密钥。"),
-        ),
-        (
-            t("Open a project", "打开项目"),
-            t("Create or import a local repository.", "新建项目或导入本地仓库。"),
-        ),
-        (
-            t("Describe the outcome", "描述目标"),
-            t("Review the team plan before members start.", "审核团队方案后启动成员。"),
-        ),
-        (
-            t("Review the result", "检查结果"),
-            t("Inspect changes, reviews and verification.", "检查改动、审查与验证记录。"),
-        ),
-    ]
-    step_cards = "".join(
-        f"<article><span>{i:02}</span><h3>{title}</h3><p>{text}</p></article>"
-        for i, (title, text) in enumerate(steps, 1)
-    )
     return f'''
-<section class="hero wrap"><div class="hero-copy"><span class="eyebrow">{t("LOCAL · MULTI-AGENT · OPEN SOURCE", "本地 · 多 Agent · 开源")}</span>
-<h1>{t("A team of agents.<br>Your local workspace.", "一支 Agent 团队。<br>你的本地工作区。")}</h1>
-<p class="lead">{t("Bring conversations, code and tools together. Give your team an outcome, follow the work, and review what it builds.", "将对话、代码和工具放进同一个桌面工作台。描述目标，跟踪团队的工作，检查最终交付。")}</p>
-<div class="actions"><a class="button primary" href="#download">{t("Download Micro-Multi", "下载 Micro-Multi")} ↓</a><a class="button secondary" href="{readme}">{t("Read the docs", "阅读文档")} →</a></div>
-<p class="platforms">Windows · Linux · {t("Bilingual interface", "双语界面")} · Apache-2.0</p></div>
-<div class="team-board" aria-label="{t("Example agent collaboration workflow", "Agent 协作流程示意")}"><div class="board-top"><span class="dots">● ● ●</span><span>Micro-Multi / {t("workspace", "工作区")}</span></div>
-<div class="task"><span class="label">{t("YOUR OUTCOME", "你的目标")}</span><p>{t("Add API pagination and verify the behavior.", "为 API 添加分页，并验证行为。")}</p></div>
-<div class="agent lead-agent"><span class="agent-icon">M</span><div><strong>{t("Lead agent", "主 Agent")}</strong><small>{t("Plan · delegate · review", "规划 · 委派 · 审查")}</small></div><span class="status">{t("Coordinating", "协作中")}</span></div>
-<div class="workers"><div class="agent"><span class="agent-icon blue">01</span><div><strong>{t("Implementation", "实现成员")}</strong><small>{t("Code & changes", "代码与改动")}</small></div></div><div class="agent"><span class="agent-icon green">02</span><div><strong>{t("Verification", "验证成员")}</strong><small>{t("Tests & evidence", "测试与验证记录")}</small></div></div></div>
-<div class="board-bottom"><span>↳ {t("Local project", "本地项目")}</span><span>Skills · MCP · dsh</span></div></div></section>
-<section class="wrap section"><h2>{t("Current source update", "当前源码更新")}</h2><p>{t("Native plugin loading, managed dependencies, isolated settings, durable streaming and reviewed teams. Existing 0.1.0 downloads remain the published baseline; no new installer is published with this source update.", "原生插件加载、受管理依赖、独立设置、持久化流与团队审核。现有 0.1.0 下载保持发布基线，本次源码更新不发布新安装包。")}</p><a class="text-link" href="{doc_url(localized_source("docs/CURRENT_CHANGES.md", chinese))}">{t("Read all changes", "查看完整变化")} →</a></section><section class="compat wrap"><div><span class="eyebrow">{t("DEEPSEEK-HARNESS ECOSYSTEM", "DEEPSEEK-HARNESS 插件生态")}</span><h2>{t("Compatible with dsh plugins.", "兼容 dsh 插件体系。")}</h2><p>{t("Run native deepseek-harness Cordis Host packages. Their tools are available to both the lead agent and specialist agents.", "原生运行 deepseek-harness Cordis Host 扩展包，让插件工具参与主 Agent 和专业成员的协作。")}</p><a class="text-link" href="{doc_url(localized_source("docs/NATIVE_CORDIS.md", chinese))}">{t("Explore the plugin guide", "查看插件指南")} →</a></div><div class="plugin-pills"><span>{t("Tools", "工具")}</span><span>{t("Services", "服务")}</span><span>{t("Dependency injection", "依赖注入")}</span><span>{t("Events", "事件")}</span><span>{t("Lifecycle", "生命周期")}</span><span>Skills</span><span>MCP</span></div></section>
-<section class="wrap section"><span class="eyebrow">{t("BUILT FOR EVERYDAY WORK", "为日常工作而构建")}</span><h2>{t("From an idea to a result you can inspect.", "从一个想法，到可检查的结果。")}</h2><div class="features">{cards}</div></section>
-<section id="download" class="download section"><div class="wrap"><span class="eyebrow">{t("PUBLISHED DESKTOP BASELINE · V0.1.0", "已发布桌面基线 · V0.1.0")}</span><h2>{t("Make room for your team.", "让团队进入你的工作区。")}</h2><p>{t("Python and Node are included. Install the package for your system, then connect your own model.", "安装包内置 Python 和 Node。选择对应系统的软件包，然后连接自己的模型。")}</p><div class="downloads">{download_cards}</div><p class="download-note"><a href="{REPO}/releases/download/v0.1.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · <a href="{doc_url(localized_source("docs/DESKTOP_RELEASE.md", chinese))}">{t("Installation and Ubuntu AppImage setup", "安装与 Ubuntu AppImage 配置")}</a> · <a href="{REPO}/releases/latest">{t("Release notes", "版本说明")}</a></p></div></section>
-<section class="wrap section"><span class="eyebrow">{t("GET STARTED", "开始使用")}</span><h2>{t("Four steps to your first conversation.", "四步，开始第一次协作。")}</h2><div class="steps">{step_cards}</div><a class="text-link" href="{readme}">{t("Open the getting started guide", "打开入门指南")} →</a></section>
-<section class="wrap community"><div><h2>{t("Build with the community.", "与社区一起构建。")}</h2><p>{t("Share ideas, report issues, contribute improvements and create extensions.", "分享想法、反馈问题、贡献改进，或编写自己的扩展。")}</p></div><div class="actions"><a class="button primary" href="{REPO}">GitHub ↗</a><a class="button secondary" href="{REPO}/discussions">{t("Join the discussion", "参与交流")} →</a></div></section>'''
+<section class="hero wrap"><div class="hero-copy"><span class="eyebrow">MICRO-MULTI</span>
+<h1>{t("Work on local projects<br>with AI agents.", "在本地项目中<br>使用 AI 智能体。")}</h1>
+<p class="lead">{t("Connect your model service, open a project and ask the agent to read code, edit files or run tests. Use a team for tasks with several roles, and inspect the work in one desktop app.", "连接模型服务，打开项目，让智能体阅读代码、修改文件或运行测试。需要不同职责时可以安排团队，并在同一个桌面应用中检查工作结果。")}</p>
+<div class="actions"><a class="button primary" href="#download">{t("Download", "下载")} ↓</a><a class="button secondary" href="{guide("README.md")}">{t("Get started", "开始使用")} →</a></div>
+<p class="platforms">Windows · Linux · {t("English and Chinese", "中英文界面")} · Apache-2.0</p></div>
+<div class="team-board" aria-label="{t("Example team assignment", "团队分工示例")}"><div class="board-top"><span class="dots">● ● ●</span><span>{t("Example task", "任务示例")}</span></div>
+<div class="task"><span class="label">{t("PROJECT TASK", "项目任务")}</span><p>{t("Add pagination to the order API and test boundary cases.", "为订单接口添加分页，并测试边界情况。")}</p></div>
+<div class="agent lead-agent"><span class="agent-icon">M</span><div><strong>{t("Lead agent", "主智能体")}</strong><small>{t("Prepare the plan and review the changes", "准备方案并审查改动")}</small></div><span class="status">{t("Review the plan", "审核方案")}</span></div>
+<div class="workers"><div class="agent"><span class="agent-icon blue">01</span><div><strong>{t("Implementation", "实现成员")}</strong><small>{t("Update the endpoint", "修改接口")}</small></div></div><div class="agent"><span class="agent-icon green">02</span><div><strong>{t("Testing", "测试成员")}</strong><small>{t("Cover boundary cases", "覆盖边界情况")}</small></div></div></div>
+<div class="board-bottom"><span>{t("Members start after you confirm", "确认方案后启动成员")}</span><span>Git · {t("Tool records", "工具记录")}</span></div></div></section>
+<section id="features" class="wrap section"><h2>{t("What you can do", "可以做什么")}</h2><p class="section-intro">{t("Use the lead agent for a focused change, or bring in members when the work can be divided. Files, command output and conversation history stay available for inspection.", "小范围修改可以只用主智能体，适合分工的任务可以交给团队。文件、命令输出和对话历史都能随时查看。")}</p><div class="features">{cards}</div><a class="text-link" href="{guide("PRODUCT_DEVELOPMENT_SPEC.md")}">{t("See example tasks", "查看任务示例")} →</a></section>
+<section id="workflow" class="wrap section"><h2>{t("Start with a model and a project", "从模型和项目开始")}</h2><p class="section-intro">{t("You supply the model endpoint and credentials. The app handles the conversation and workspace; your project keeps its own build tools and dependencies.", "模型接口和凭据由你配置，应用负责对话与工作区；项目继续使用自己的构建工具和依赖。")}</p><div class="steps">{step_cards}</div><a class="text-link" href="{guide("docs/WORKSPACE.md")}">{t("Read the workspace guide", "阅读项目与对话指南")} →</a></section>
+<section id="extensions" class="compat wrap"><div><h2>{t("Add the instructions and tools you need", "添加需要的指令和工具")}</h2><p>{t("Use Skills for reusable instructions, MCP for service tools and dsh plugins for additional capabilities. Manage them in Customization and configure each connection or package before using it.", "Skills 保存可复用指令，MCP 接入服务工具，dsh 插件补充应用能力。在“自定义”中管理这些扩展，并在使用前完成连接或参数配置。")}</p><a class="text-link" href="{guide("docs/extensions.md")}">{t("Read the extension guide", "阅读扩展指南")} →</a></div><div class="plugin-pills"><span>Skills</span><span>MCP</span><span>dsh</span><span>{t("Local commands", "本地命令")}</span></div></section>
+<section id="technology" class="wrap section"><h2>{t("Technology", "技术栈")}</h2><p class="section-intro">{t("An Electron desktop shell runs a local Python backend. Node.js hosts the agent and plugin runtimes, while the interface shows their work and records.", "Electron 桌面外壳启动本地 Python 后端，Node.js 承载智能体和插件运行时，界面展示执行过程与记录。")}</p><div class="stack-grid">{stack_cards}</div><a class="text-link" href="{guide("docs/architecture.md")}">{t("Read the architecture guide", "阅读架构说明")} →</a></section>
+<section id="download" class="download section"><div class="wrap"><h2>{t("Install Micro-Multi", "安装 Micro-Multi")}</h2><p>{t("Choose a package for your system. Python and Node.js are included; install Git for repository work and any external tools your extensions require.", "选择对应系统的软件包。安装包包含 Python 和 Node.js，仓库工作需要另装 Git，扩展所需的外部工具也按需安装。")}</p><div class="downloads">{download_cards}</div><p class="download-note"><a href="{REPO}/releases/download/v0.1.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · <a href="{guide("docs/DESKTOP_RELEASE.md")}">{t("Installation and Linux requirements", "安装与 Linux 环境要求")}</a> · <a href="{guide("docs/deployment.md")}">{t("Run from source", "从源码运行")}</a></p></div></section>
+<section class="wrap community"><div><h2>{t("Help and contributions", "帮助与贡献")}</h2><p>{t("Check the troubleshooting guide when something fails. You can report bugs, discuss ideas or contribute code and documentation on GitHub.", "遇到问题时先查看常见问题，也可以在 GitHub 报告问题、讨论建议，或贡献代码与文档。")}</p></div><div class="actions"><a class="button primary" href="{guide("docs/TROUBLESHOOTING.md")}">{t("Troubleshooting", "常见问题")}</a><a class="button secondary" href="{REPO}">GitHub ↗</a></div></section>'''
 
 
 def render_guide(source: str, renderer: MarkdownIt) -> str:
@@ -232,10 +316,10 @@ def main() -> None:
     for chinese, destination in ((False, OUT / "index.html"), (True, OUT / "zh/index.html")):
         destination.write_text(
             page(
-                "本地多 Agent 桌面工作台" if chinese else "Your local agent workspace",
-                "兼容 deepseek-harness（dsh）插件体系的本地多 Agent 桌面工作台。"
+                "本地项目的 AI 桌面应用" if chinese else "AI agents for local projects",
+                "连接模型，在本地项目中阅读代码、修改文件、运行测试，并使用智能体团队和扩展工具。"
                 if chinese
-                else "A local multi-agent desktop workspace compatible with the deepseek-harness (dsh) plugin ecosystem.",
+                else "Connect a model to read code, edit files and run tests in local projects, with agent teams and extension tools.",
                 landing(chinese),
                 lang="zh-CN" if chinese else "en",
                 path="zh/" if chinese else "",
@@ -249,9 +333,12 @@ def main() -> None:
         lang = "zh-CN" if chinese else "en"
         counterpart = localized_source(source, not chinese)
         sidebar = "".join(
-            f'<a href="{doc_url(guide)}">{html.escape(label)}</a>'
-            for guide, label in GUIDES.items()
-            if guide.endswith(".zh-CN.md") == chinese
+            f"<h3>{html.escape(labels[int(chinese)])}</h3>"
+            + "".join(
+                f'<a href="{doc_url(localized_source(guide, chinese))}">{html.escape(GUIDE_PAIRS[guide][int(chinese)])}</a>'
+                for guide in sources
+            )
+            for labels, sources in GUIDE_SECTIONS
         )
         content = render_guide(source, renderer)
         body = f'''<div class="docs-layout wrap"><aside class="sidebar"><span class="eyebrow">{"文档" if chinese else "DOCUMENTATION"}</span><div class="search"><label for="doc-search">{"搜索文档" if chinese else "Search docs"}</label><input id="doc-search" type="search" placeholder="{"搜索文档…" if chinese else "Search docs…"}" autocomplete="off"><div id="search-results" hidden></div></div><nav aria-label="{"文档" if chinese else "Documentation"}">{sidebar}</nav></aside><article class="doc"><div class="doc-meta"><span>MICRO-MULTI / {"文档" if chinese else "DOCS"}</span><a href="{REPO}/blob/main/{source}">{"查看源码" if chinese else "View source"} ↗</a></div>{content}</article></div>'''
