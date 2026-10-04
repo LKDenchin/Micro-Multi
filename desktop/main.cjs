@@ -47,7 +47,7 @@ if (process.platform === 'win32') app.setAppUserModelId('Micro-Multi');
 const projectRoot = path.resolve(__dirname, '..');
 const port = Number(process.env.MASP_PORT || 3080);
 const appUrl = `http://127.0.0.1:${port}/`;
-const EXPECTED_BUILD_ID = '2026-10-03-v20-compact-extension-settings';
+const EXPECTED_BUILD_ID = '2026-10-04-v22-plugin-websocket';
 let backend;
 let ownsBackend = false;
 let mainWindow;
@@ -138,7 +138,15 @@ async function ensureBackend() {
   });
   const deadline = Date.now() + (process.platform === 'linux' ? 120000 : 30000);
   while (Date.now() < deadline) {
-    if (backend.exitCode !== null) throw new Error(`Micro-Multi 服务提前退出，退出码 ${backend.exitCode}`);
+    if (backend.exitCode !== null) {
+      const logPath = path.join(dataHome, 'server.stderr.log');
+      let diagnostic = '';
+      try { diagnostic = fs.readFileSync(logPath, 'utf8').slice(-6000); } catch {}
+      const reason = diagnostic.includes('Another Micro-Multi service owns this data directory')
+        ? '数据目录正被另一个 Micro-Multi 服务占用，请正常退出使用同一数据目录的服务后重新启动。'
+        : '服务启动失败，请查看启动日志中的具体原因。';
+      throw new Error(`Micro-Multi 服务提前退出，退出码 ${backend.exitCode}\n${reason}\n日志：${logPath}`);
+    }
     const status = await checkServiceHealth();
     if (status.running && status.upToDate) return;
     await new Promise((resolve) => setTimeout(resolve, 250));

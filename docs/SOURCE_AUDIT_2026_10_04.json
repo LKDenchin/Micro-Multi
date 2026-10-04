@@ -1,0 +1,920 @@
+{
+  "date": "2026-10-04",
+  "scope": "All rg --files source files with code extensions; ignored dependencies, runtime data and upstream reference excluded. Every line automatically read and traversed; parser checks where supported. This does not assert manual semantic review of every line.",
+  "file_count": 152,
+  "line_count": 42487,
+  "files": [
+    {
+      "path": "desktop/main.cjs",
+      "lines": 273,
+      "sha256": "27fbe11180904395527d092e6fb692f610a2592f222d7e18ac7d488ccd9ebcfb",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "desktop/preload.cjs",
+      "lines": 14,
+      "sha256": "fa3564482fd75ced9efacd401be690ee5df56f92a3ce2f8eae7b2ae9d100837d",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "examples/native-cordis/counter.mjs",
+      "lines": 5,
+      "sha256": "9d423155189ea016590ed20f185e906376017c82abfce0e20ebba58cf44d9088",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "examples/native-cordis/tool.mjs",
+      "lines": 13,
+      "sha256": "289661f43963ef66707ad0e8fffa72d291596e6ac493f2c0ec711fef6d47dd65",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/benchmark.py",
+      "lines": 68,
+      "sha256": "881891d183d59efe53c55a20272d1f8177ef9e8dc461d9e5610bc09c69c01e7b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/benchmark_collaboration.py",
+      "lines": 108,
+      "sha256": "5d22d2f656588d749a55007d6964ffc76c5958fcaac35f5c5d9a9180bfcc8015",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/build_site.py",
+      "lines": 265,
+      "sha256": "e1790c442c814d7439e42a1be697dec80083c08ac2b576e98cb5d3058afb83cc",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/open_design_launcher.cjs",
+      "lines": 60,
+      "sha256": "50fe50a805691dc5ef0c7c79f366445ba3c8bd269f316c59f937c2083b67a13f",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/prepare_desktop.py",
+      "lines": 146,
+      "sha256": "94d73dd4de6efc87b318ed08aab32e9a2e9558b1993812f1f97572a2d438d4b0",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/publication_audit.py",
+      "lines": 57,
+      "sha256": "d65f843ca65f2ff4bcd2df8456b1c418f38053f7df6f541e33d293eaeb3c0167",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/release_checksums.py",
+      "lines": 22,
+      "sha256": "93064a6c36f48e39e3ab78c0bb0480fc2dc6f9e01d954f6d8510928bca42b7a8",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/render_app_icon.cjs",
+      "lines": 15,
+      "sha256": "d7f9b4ccf75ca241b54763fbbaacf3922310d2e8cbe3542fd8c55a096c6971bd",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/repair_refraction_replay.py",
+      "lines": 46,
+      "sha256": "3704f8d647db04975e71a6af32565843d1c268d0e208a3167fd7d366b8a2648d",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/replay_refraction.py",
+      "lines": 74,
+      "sha256": "8b2461db2e7e693508939555b7c5a99ba156bf46ecb588d810e1e68e378e7315",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/reset_local_data.py",
+      "lines": 89,
+      "sha256": "93052c55c8ee8faaaa0713bbfe802d9d046f9e6d99a71464af414f7812e41529",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/smoke_packaged_desktop.py",
+      "lines": 269,
+      "sha256": "b595a3b2013358b2dbe7daa3d5010ed92c699fe798fa5980dd9a0c53d9745b26",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/upload_linux_release.py",
+      "lines": 51,
+      "sha256": "eb78ab05c5b82c0a9532144da55c08d4b8230333bfa40a79078d08d25e70bd82",
+      "validation": "Python AST"
+    },
+    {
+      "path": "scripts/verify_attachment_preview.cjs",
+      "lines": 35,
+      "sha256": "3baeb60489124e87b93a77d15815762d3e46287ecd628130077701e06e511a01",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_brand_approval.cjs",
+      "lines": 18,
+      "sha256": "a01f1088e68451ed5b30ae921a350ecc36538a64b65783e197d156ef06c3583d",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_chat_regressions.cjs",
+      "lines": 92,
+      "sha256": "b3564190677d93f7d28b0d0bfed33cbb3e1486afe160742a324b39e476365221",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_desktop_clipboard.cjs",
+      "lines": 20,
+      "sha256": "13f38868667180b7821f6ed1c53217b75b5b64abc3bc1581653e8f7a7d3b2a0c",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_desktop_recovery.cjs",
+      "lines": 88,
+      "sha256": "09ea04ed8c1c705c5150b1d9943ffe7f4b279b47030f0e49b786df87723061af",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_execution_memory_ui.cjs",
+      "lines": 30,
+      "sha256": "ca1a596711dfe083504dee0ceab2d8faaacfa69d47b05786d44e2a16168212d6",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_extension_lifecycle.cjs",
+      "lines": 48,
+      "sha256": "a6c4fb2088a0b891e734c0408f5a843365cb8521b25e39743af4bc940ffd7330",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_light_theme.cjs",
+      "lines": 54,
+      "sha256": "937c8be21b1efaa9eb36f9a9194c20036261539f297215cbb063fb5d1324b417",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_live_turn_recovery.cjs",
+      "lines": 42,
+      "sha256": "7d50939d774a7b8bda4d456f29b3117b4c5fd8f631741268021472dbf26d4648",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_messenger_repair.cjs",
+      "lines": 61,
+      "sha256": "1632d01d19d96ea156e344f777cfc331bbe143bd90f7e1c831a5e38e27e54503",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_micro_multi.cjs",
+      "lines": 40,
+      "sha256": "335b338bcfab6351ca5e85e0f6f7b64eaa69326271845719ca770fe6d0276ee3",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_native_cordis.cjs",
+      "lines": 39,
+      "sha256": "2262bc2bddc0830b7c9251e0fdcfc3f8f7e6ce4fbf57b173406e6beccdc0c633",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_native_form.cjs",
+      "lines": 48,
+      "sha256": "2735498e40e34be0ddcf7ee38302c19bb0e15d6fa2d375374def361255fd22e6",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_refraction.cjs",
+      "lines": 46,
+      "sha256": "64f9d1543ef7e9e6af96e45be17eb555d8fde9a2a47b4a82345fbbd0c3c9b3a4",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_renderer_replay.cjs",
+      "lines": 39,
+      "sha256": "679e88ab0332c19b0119e7793a090c6bb74ceb33cf0b906e9e60abdae10aef94",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_subagent_model_ui.cjs",
+      "lines": 34,
+      "sha256": "33547591f27d50d3b31abbc569d7aface76bfbc0283ae1eb9660d6369033085f",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "scripts/verify_vision_plugin.py",
+      "lines": 54,
+      "sha256": "b4f2327184f45ff92ba1f8657a656d24b405e8ae6f85d513aee3b992c6d42136",
+      "validation": "Python AST"
+    },
+    {
+      "path": "site/assets/site.css",
+      "lines": 5,
+      "sha256": "52a97bc7893790422c23751fb19067a16a9a9db60c0794137e2a81b7df0ab358",
+      "validation": "Every line read"
+    },
+    {
+      "path": "site/assets/site.js",
+      "lines": 47,
+      "sha256": "d713781bdb5c6dc35e3d929672a9cdc4f262b5c6973e5fb185a8b9d9f93426f8",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/__init__.py",
+      "lines": 3,
+      "sha256": "c5954bd55f4cee5fd65a108e8b8ee3eba846d1b4d889f466c117ac2d58c6d54e",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/_vendor/deerflow/__init__.py",
+      "lines": 1,
+      "sha256": "8631fc8f8f045d374196592b2ea3541a3479a1b0ff62a2a6ba7a5dafa5a2567f",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/_vendor/deerflow/messages.py",
+      "lines": 20,
+      "sha256": "25c5d40c3fad52084c5081dcac259fb41f9824d5eef953029f929608eeb33809",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/_vendor/deerflow/model_length_termination_detectors.py",
+      "lines": 126,
+      "sha256": "baf396af2e120af0b2920e041293a528326e97644d337e2f24bceca51e305528",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/_vendor/deerflow/model_response.py",
+      "lines": 65,
+      "sha256": "12994d69f6b4290d1f11d2a8fcf675cc147c10b31d9d964f6644896e2a90ec55",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/_vendor/deerflow/receipt_verification.py",
+      "lines": 191,
+      "sha256": "5c946c3ba9430f2a91837c17d400447529ea1029f429bebea3804ddb7a19137b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/_vendor/deerflow/tool_receipt.py",
+      "lines": 285,
+      "sha256": "137f8017efa6fe38f5ff3a0c435cbb52022e288428e736fe7fda18631cf20c3f",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/agents.py",
+      "lines": 1155,
+      "sha256": "2cea4d62b93f85ce24647530b48cb08443c49e665881784b7c65ce2bc5dee330",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/api.py",
+      "lines": 5671,
+      "sha256": "5b0f36fe15f65337190f160f92eedd0127c26b57ad2ed9021e475108fdfc3737",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/attachments.py",
+      "lines": 45,
+      "sha256": "ce3ab20b5da145c654b75a93208868a3d4db90ea593607dc2fadfd488b453db0",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/chat_tools.py",
+      "lines": 1306,
+      "sha256": "fd226a0dfb8847e10f41bc0ec9d72ccd36d9ae5667d5452e02fc503abb22dcc9",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/cli.py",
+      "lines": 94,
+      "sha256": "7fde5ce21f379deab4ae655b6f5795b8fc285991595c1f29453fcd10ddd592f4",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/code_review.py",
+      "lines": 154,
+      "sha256": "542279067edb1c6d44f70e10c2de286f18e3ce49689ea595203281627a113506",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/compaction.py",
+      "lines": 864,
+      "sha256": "b82176d170e93532951ca6bfed7f4eb5b66386fc8654fc76ba00882f75710742",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/contracts.py",
+      "lines": 68,
+      "sha256": "0566e85792c0a404665ee798338fef20406442564f3601ef3219967554d0e9f6",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/cordis_runtime.py",
+      "lines": 742,
+      "sha256": "4fb2b7bb41231f6e121d2d6221a58035027c1dd87125d2b2ca7f704a88c2b3c1",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/domain.py",
+      "lines": 427,
+      "sha256": "9a9dee90ccade3a45bd9c2fcf927d221dfce04f9642da4f99582518ac3c893d3",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/extension_builds.py",
+      "lines": 155,
+      "sha256": "d0b87b4c1a27b1cbff2ffe918c32a7bb94b26fab723b250c2b18b1255ac74662",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/extension_config.py",
+      "lines": 73,
+      "sha256": "8a44380948bb1bc7242c1c67e84732bffb93b24cff7a62377bd87508952181be",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/extension_sources.py",
+      "lines": 137,
+      "sha256": "b348c8a5811d0f976cdf379f32ca622e8804b7a59ff1695bdf7985935c5a1843",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/external_jobs.py",
+      "lines": 91,
+      "sha256": "965f57955ce11db01ed5fd0c4eb48321bf43d0be76f29383bc4dcc9ac174d067",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/lock.py",
+      "lines": 29,
+      "sha256": "220bd0328fb1b340070eeb6fbf94dec2bb208f33262ce10cd2c66f7f3c9f91dc",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/managed_commands.py",
+      "lines": 98,
+      "sha256": "c4b8874c8ed4fdf7ecd82e984bb1656d74d087d80af3447de1186ba900bcb1fc",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/mcp_bridge.py",
+      "lines": 365,
+      "sha256": "2f71d61ee10a8c52f08279240d1aa596fac1b2028965baa0e4a145b0b71354c3",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/mcp_connections.py",
+      "lines": 150,
+      "sha256": "541fb84ba7e2b8991a6930b2d168cccec05b9e7af27976c33e5b60b935d78ed0",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/mcp_server.py",
+      "lines": 377,
+      "sha256": "b93c667505096fd00ae9320fd4924e1e90b40bc81ec31a63b0b46acfc8cb6fd7",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/memory_os.py",
+      "lines": 1064,
+      "sha256": "993e090a3cd74782811943634175823171860e694b975da8585f74513faa3cfe",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/model_runtime.py",
+      "lines": 416,
+      "sha256": "5090bc5ed9f1b287e20fcb35c4bef3f2bccd80ee3964b3d4e6ffbe560e149995",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/model_settings.py",
+      "lines": 94,
+      "sha256": "55cf4338a92672d6d10abb50721bd91eb6763b9dfc4e39ab2f595c4c627bd9ef",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/native/build_plugin_client.mjs",
+      "lines": 40,
+      "sha256": "b83d7df5bf0b3ce2221d3fcb947a7c694e7f21ef135cc805111ccfd8b9a05987",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/chat_runtime.mjs",
+      "lines": 182,
+      "sha256": "9447c8f98084e347ed8c006ef871705b465eabc3d93ae681d804b4e854989b50",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/cordis_host.mjs",
+      "lines": 484,
+      "sha256": "5bc3597f62e92dbe523041d5a5e538a39892648e72eeca98f7875ff0603b0b60",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/framework_guard.mjs",
+      "lines": 24,
+      "sha256": "392ae6b5414c895c84ab60c9fa9ca391cce4b83b0bcf2035ac14a87d56b24e45",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/plugin_client.mjs",
+      "lines": 139,
+      "sha256": "fd9bac1a752aba3b84b78fe9f86cdf3646f376767192af0116cc695632250e7b",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/plugin_config.mjs",
+      "lines": 31,
+      "sha256": "7d7f94f4e6c0c7e5293c917001972e276554ae1432ba19e46932325933e904a5",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/plugin_connection.mjs",
+      "lines": 56,
+      "sha256": "ebfd82aee3410ed3ebf706b1c324e0a3720739d5b36e17712a7187d7e27e9536",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/plugin_portals.mjs",
+      "lines": 11,
+      "sha256": "3ce5d2060a3daaa08213d951a6be557819d874a1e9f0d63b9fb55f27fdcf7d0c",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native/plugin_webserver.mjs",
+      "lines": 52,
+      "sha256": "23b15cdec190f46686fb7839a09a2c2e2d8e1fe80b94da43f764d8df1eb5ef06",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/native_approval.py",
+      "lines": 66,
+      "sha256": "a47d1be016afdf7f400b0fe79ae4925fbf1cf4690710c3791b9a338fdcb10829",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/native_chat.py",
+      "lines": 296,
+      "sha256": "758df029dafd72c61a47f2a5a94b4fa1c80c36386955393003bc521b26dbc03f",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/native_process.py",
+      "lines": 100,
+      "sha256": "f16d5c7de8ca60cb1441f16b83e4aaef6d89cc4ddd050e8bffd381743b81c732",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/native_profiles.py",
+      "lines": 219,
+      "sha256": "1be899d7ebb295f6db7000b44825bca51b8f87b2d2f4b00fc69dc29299752efa",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/permissions.py",
+      "lines": 143,
+      "sha256": "0d05008d639b6d293a73d2076b253be01e40dd52896e51cb96dad8efcd9508fc",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/plugin_market.py",
+      "lines": 86,
+      "sha256": "3621096468b2e2e1695e296145792d8aa872a7215ddd7f6db8cbbd268b0cabbb",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/plugin_models.py",
+      "lines": 199,
+      "sha256": "89f54cd8f4edd77692c9f2b814e16a91f658fa4301f82fe058403aebb442afdb",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/plugin_surface.py",
+      "lines": 192,
+      "sha256": "cb786af3736b3e2c1447aa4f7276eebeb65e3445531b6c60f56af5aeaba63735",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/plugin_tools.py",
+      "lines": 1116,
+      "sha256": "b928257afa45b05b3eff693bd5e58bf4691e45354b1935cbe7292ae9b134cfb7",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/review_policy.py",
+      "lines": 36,
+      "sha256": "bbe3547b42355fcc3456c6a86b0fce8853f1930bf80324444639c94efc0932df",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/service.py",
+      "lines": 964,
+      "sha256": "e65226a4783dbae179dafff2dce851767b61f22f7cb385129945f464c4e060fe",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/skills.py",
+      "lines": 140,
+      "sha256": "9fd5ba1084c9ee6dc5c7bd29a476d8d8d87ef0fc10996eeadfc516584f54269a",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/storage.py",
+      "lines": 172,
+      "sha256": "8d0eac16ef9b373e5b840f762ad747ae63d01d4787bd4c3760500cd636a1f869",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/supervisor.py",
+      "lines": 1558,
+      "sha256": "522f572f1e634d0a1f1539eea96b2605fdd489967e881b007e62a6713c91b093",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/team_review.py",
+      "lines": 73,
+      "sha256": "aafb4ff4acbda933308ee8d8be738e3934a5f1f08d875d2a3a9ace96d2df6269",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/turn_hub.py",
+      "lines": 160,
+      "sha256": "0d9e47492b86d5642568af541abace5e22d46b50af6228e5f6a55b79a843e02c",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/turn_journal.py",
+      "lines": 158,
+      "sha256": "7162ac301245b4ff9885c5338f12557ddccb6c0075dee11b044948ad8874906b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/verification.py",
+      "lines": 391,
+      "sha256": "812a35cde6c4f04476aab66b7089862c09e320d3c58842a768b4a2013d432e12",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/web/attachment-preview.js",
+      "lines": 44,
+      "sha256": "f4384e63e48b4230f009f5b1602982cb68b8b2005335cc9eadf6b6e6a3e515e9",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/web/chat.css",
+      "lines": 1149,
+      "sha256": "8999a01aec9748785e74cb9e2c4eb862661e9e980aa516aa53c4df58c894ed95",
+      "validation": "Every line read"
+    },
+    {
+      "path": "src/masp/web/chat.html",
+      "lines": 642,
+      "sha256": "a3784aa9feab1e0d9b9c8dc1d3f7ffd40158a5f1a35682f50189a735ccbecd1d",
+      "validation": "Every line read"
+    },
+    {
+      "path": "src/masp/web/chat.js",
+      "lines": 5558,
+      "sha256": "68f5044e5570f3310d1b396d51f5f577e07950bb3be633155c9e0a5f63d55a56",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/web/i18n.js",
+      "lines": 664,
+      "sha256": "ef39f5d94419b199ea00bf50dc2c69a7a1791988a5ce01c8deadafad2fd20b91",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/web/icons.js",
+      "lines": 47,
+      "sha256": "6c8dfb552574051cce5476dcd270a8f3058cef7639ef991d07d2b450f3838b53",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/web/markdown.js",
+      "lines": 641,
+      "sha256": "3134206964da918a8fe65f7dc4f6222b20d0d3b737caffa34cd02bc9246a6f42",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/web/native-form.js",
+      "lines": 132,
+      "sha256": "506c7b71f4f5536cf640a71851b08481b1f330b8519bb34ba82eab27f2a2c040",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "src/masp/work_budget.py",
+      "lines": 49,
+      "sha256": "b9015da83b59f2705ae889caf1d8e698a4cae50a2b13e8a6ae4c1f19a6a3b031",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/workspace.py",
+      "lines": 263,
+      "sha256": "a40f746c8abcc85234337d2be30620074770feb2d46bc93862974d4eb91eaac2",
+      "validation": "Python AST"
+    },
+    {
+      "path": "src/masp/workspace_coordination.py",
+      "lines": 155,
+      "sha256": "195320bf42d40f836456621f6acc79ccc03f3efac009d21751f5a2ab81eab18e",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/chat_startup.test.mjs",
+      "lines": 31,
+      "sha256": "814c6f0c4147d50557bf7bd22f1ae2e985a9a57303d3b0a5c568852ef7b23e04",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "tests/conftest.py",
+      "lines": 12,
+      "sha256": "da1cc595c023da2e52e1848728f91f674891eac729ad0764948c12c25e5e908b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/mcp_echo_server.py",
+      "lines": 15,
+      "sha256": "5e54a1e9bbc193ccf086ca6ea47682d681c53b057f1108366520f098ba101270",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/plugin_client.test.mjs",
+      "lines": 74,
+      "sha256": "a254eacc9f0214e794bcf947de1f2625523d8d7eaf78e4aa32e797a3032d0756",
+      "validation": "Node syntax"
+    },
+    {
+      "path": "tests/test_adapters.py",
+      "lines": 71,
+      "sha256": "86157af966c9447c1db439d643fb0df6372c68392c15a81be028254caf579215",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_agent_liveness.py",
+      "lines": 220,
+      "sha256": "49e5dacdb0453645a3476113ba0dd694e41ab51ea8c511928196e96657596676",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_api.py",
+      "lines": 68,
+      "sha256": "4526735aa879bc34313e2688af882cd74d25ec5522f2255a141f1b044ebbd4be",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_autonomous_collaboration.py",
+      "lines": 334,
+      "sha256": "aa18232147170fa4498a5d8fc7062ad8ed2f7c6986a0ab23143e072c7481cb5b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_background_collaboration.py",
+      "lines": 254,
+      "sha256": "bfcd971e25a199ac04f6ec80c2d0876954e526b030fd0d8d2a4725057e21711d",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_chat_models.py",
+      "lines": 217,
+      "sha256": "34635ebd0ff0214563e81637909d46bb5ec8fd869e27e60aadea26cc4f99415a",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_code_review.py",
+      "lines": 51,
+      "sha256": "6da8727012b00e72a9c8cfa4e64cef7f2de63f57de2b8a2a53f15251f826b714",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_collaboration_mode_contract.py",
+      "lines": 81,
+      "sha256": "f47f5e52b6e1ea28122da8e7e8c0da6cb905dd70cd335e0d138db5d0957d85a7",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_contracts.py",
+      "lines": 84,
+      "sha256": "fb5b8cc5b8e1e17ead7dc925fb11d52f57f9604277196a21e8ddbd76dbf2e284",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_conversation_lifecycle.py",
+      "lines": 55,
+      "sha256": "289332d0230298b1768193ab9eba335d49e6f09c77dab9b7620aa5241e1c2d0e",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_dispatch_boundaries.py",
+      "lines": 147,
+      "sha256": "4a74d1b3d70a57ad800f9f1d812d0e2ea7979bfce581fb2a5550048998a7ed14",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_durable_turns.py",
+      "lines": 215,
+      "sha256": "4d98e60ec5d543693e6f810aa52eb3bb5a0a0d53fd65a6167fe381506c1b5002",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_engine.py",
+      "lines": 240,
+      "sha256": "6d52392cc21399179a8c25a86f9470f632c9f25d31897ed963f3e1ee93880c4b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_execution_memory_visibility.py",
+      "lines": 96,
+      "sha256": "a93ed7881b6f7df3761c78d052a1f67c84f061f465e55bd66bf3940151111079",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_extension_builds.py",
+      "lines": 85,
+      "sha256": "2b17001c6041827cd58fc3dabe1952ebe859f79232ab7afdcbcccd5dd570f8eb",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_extension_configuration.py",
+      "lines": 42,
+      "sha256": "47e4222a796cf8745ac87fa4731bc3f8d575feacc80f31e9c963781dc76387e2",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_extension_lifecycle.py",
+      "lines": 541,
+      "sha256": "b2016106de218ae4609c5b26fdbf477ab16c785c8702c3cea8a37d55f6128924",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_extension_sources.py",
+      "lines": 23,
+      "sha256": "ddf85b892997f8ee3be1b81854af9f461db6af422007a26a52faef22e2740181",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_external_jobs.py",
+      "lines": 137,
+      "sha256": "2f0d16fa0a579e6fb563375b5c51f879185bac2edcd33114acdbd595c6447d7b",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_fourteen_fixes.py",
+      "lines": 1088,
+      "sha256": "371ad9d96a44b42a4cc8cb1ff4cc966ec5035e4f1e9f13e316bd0ea483de60c5",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_live_runtime.py",
+      "lines": 142,
+      "sha256": "976f1fbb30ccc24701ddf400aafbdb5c50ee261cb7d5d4fefb9293376fa3cd8a",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_managed_commands.py",
+      "lines": 67,
+      "sha256": "f999f2b460d0f4e91d473f26f64085759587fad856a1d6fd33cfb8bbeb29f818",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_mcp_bridge.py",
+      "lines": 127,
+      "sha256": "104d87f46bda8a6ce359f5d84c28a7256db0b08f225b114c7753ea325d5a1c54",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_micro_multi.py",
+      "lines": 633,
+      "sha256": "33e30d8c71ea1354ce0cffcb91d4950d17b0fd099b1fac76433e1059c7482d4d",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_model_recovery.py",
+      "lines": 192,
+      "sha256": "c7a9615abdd7c8f8dd34d85fecf032104e2bfabc5851b03cdf1cd28cd87a3e35",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_native_chat.py",
+      "lines": 224,
+      "sha256": "28ae7f9fcd2d4c9db145e52fb3fa80cce0edd5ac8d0b65cac5a7ef3ffea1c895",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_native_config_layers.py",
+      "lines": 65,
+      "sha256": "7ad2a72e663925fdaffea7297b3fd74ba9a225dacd02161b8dd7682a9d20d674",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_native_context_projection.py",
+      "lines": 65,
+      "sha256": "effa348f69f9c5851b99b57aa15f9ec27a9bdf582deeac7f24cc012b1c2750d8",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_native_cordis.py",
+      "lines": 643,
+      "sha256": "b7aca63bea0fc1132e9c4aef841d09d5765d949258793071beeab15ce268fb70",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_native_profile_form.py",
+      "lines": 84,
+      "sha256": "01aeee06e4a93efcef60aa4d699b383a7ddb22a085739b7b1edbfb8748d6cc20",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_native_profiles.py",
+      "lines": 154,
+      "sha256": "2a937c61919a642576f7116b6fb7e5599f5a7e46eed3c428cefce58e17ed91a2",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_parallel_integration.py",
+      "lines": 85,
+      "sha256": "ed58c4fb7581c62b5a3a49858d7cface9da95a9ca7b340c0dad08a6f2a7d2f08",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_plugin_tools.py",
+      "lines": 55,
+      "sha256": "38665234313adeebea7f8d613c2a92e233266d026e839761d704886df1ebf1ec",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_project_import_and_search.py",
+      "lines": 98,
+      "sha256": "cd8a26d3203c46837864bdbefcb7d9a6ed58807942840763251cca30a50bf21a",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_review_policy.py",
+      "lines": 29,
+      "sha256": "fe3191df16eaca8fda93baec7b01ebd07112dc46170d6f3cee338d76bfb70112",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_reviewed_customization.py",
+      "lines": 245,
+      "sha256": "c931235c1348fae21a633676dcb4e0b7410665e0a72d6fb41884ec30597181dc",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_security.py",
+      "lines": 80,
+      "sha256": "cab719429b388ce883cf4b00cd298cdacd74c7072b54bb1211ae5dd639c51a5e",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_skills.py",
+      "lines": 43,
+      "sha256": "c04bbc34be1b56513d1b56def1432e19745b657c7a2a7608b59aabe851db79e6",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_supervisor_and_accurate_diff.py",
+      "lines": 397,
+      "sha256": "15eda903db0bf0c35ab3b469058cea806bbc7e1ea2ea05c1903bb4ca26995e7a",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_surface_stream_regressions.py",
+      "lines": 798,
+      "sha256": "ad44b452d4bdca901a12a5335b96c5b99d7457cf0d034151193070da291687fc",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_system_v3_features.py",
+      "lines": 296,
+      "sha256": "ae245567e2a6e641ec3772861d918748cb427be3ca6307ceaf5d34da2f518de0",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_team_flow.py",
+      "lines": 192,
+      "sha256": "a255356900a17be9a4db1b5ff6a7df0b7438906a723ed2baaf455190f785b0f7",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_vision_router_admission.py",
+      "lines": 86,
+      "sha256": "9a421ac842c07d5a79931fc1116bbeaa11060252d3099caeaa9b9fafd4138e1e",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_workspace_agent_tools.py",
+      "lines": 145,
+      "sha256": "6f1ea15affc828166cbba70d63895e3ee44dcaa48339af238607580f6348946d",
+      "validation": "Python AST"
+    },
+    {
+      "path": "tests/test_workspace_coordination.py",
+      "lines": 248,
+      "sha256": "ba0143eacccfddb456e2c21d0d0e9e65c8778eec10800c4471471f036d0d575f",
+      "validation": "Python AST"
+    }
+  ]
+}

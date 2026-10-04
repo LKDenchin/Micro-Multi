@@ -24,19 +24,39 @@ import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local';
 import { registerHooks, createRequire } from 'node:module';
 import { readdirSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL,fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { format } from 'node:util';
-import {runNativeChat,receiveBridge} from './chat_runtime.mjs';
+import {runNativeChat,receiveBridge,bridgeValue} from './chat_runtime.mjs';
 import PluginConnection from './plugin_connection.mjs';
+import {ClientDependencies} from './client_dependencies.mjs';
+import {ServiceDependencies} from './service_dependencies.mjs';
+import PluginWebServer from './plugin_webserver.mjs';
+import BundleConfigEditor from './plugin_config.mjs';
+import LocalCredentials from '@deepseek-ai/dsh-credentials-local';
+import {installNamespaceSettings} from './legacy_settings.mjs';
+import Loader from '@deepseek-ai/cordis-plugin-loader';
+import SettingsForms from '@deepseek-ai/dsh-settings';
+import Schema from '@deepseek-ai/schemastery';
+import SettingsController from '@deepseek-ai/dsh-api-settings-controller';
+class BundleSettingsForms extends SettingsForms {
+ bundleSchemas=new WeakMap();
+ schema(entry){
+  const schema=super.schema(entry);
+  // Application bundles support durable remounts as well as live edits. Older
+  // clients therefore retain their full form without mutating plugin schemas.
+  if(entry.bundleId&&schema){let form=this.bundleSchemas.get(schema);if(!form){form=new Schema(schema.toJSON());form.meta.volatile=true;this.bundleSchemas.set(schema,form);}return form;}
+  return schema;
+ }
+}
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry';
 import TypertGateway from '@deepseek-ai/dsh-api-gateway';
 import * as ApiRemotes from '@deepseek-ai/dsh-api-remotes';
 const protocolWrite = process.stdout.write.bind(process.stdout);
 const PREFIX = 'MICRO_MULTI_CORDIS:';
-const write = value => {
+const write = (value,limit=500000) => {
   const encoded=JSON.stringify(value);
-  if (Buffer.byteLength(encoded)>500000) throw Error('Cordis response exceeds 500 KB');
+  if (Buffer.byteLength(encoded)>limit) throw Error('Cordis response exceeds protocol limit');
   protocolWrite(PREFIX+encoded+'\n');
 };
 // Console output cannot corrupt JSON RPC. Diagnostics remain in the backend-owned log.
@@ -44,6 +64,8 @@ for (const name of ['log','info','warn','error','debug']) console[name]=(...args
 const runtimeRequire=createRequire(import.meta.url);
 const available=new Map();
 const packageRoots=new Map();
+let moduleDependencies,resolvingDependencies=false;
+const dependencyRoots=new Set();
 const scopeDir=dirname(dirname(runtimeRequire.resolve('@deepseek-ai/cordis/package.json')));
 for(const name of readdirSync(scopeDir)){
  try{available.set('@deepseek-ai/'+name,pathToFileURL(runtimeRequire.resolve('@deepseek-ai/'+name)).href);}catch{}
@@ -54,10 +76,18 @@ registerHooks({resolve(specifier,context,nextResolve){
   // installing hooks to avoid recursion and force the shared framework instance.
   if (['@deepseek-ai/cordis','cordis','@deepseek-ai/dsh-tools'].includes(specifier))
     return {url:available.get(specifier),shortCircuit:true};
+  if(resolvingDependencies)return nextResolve(specifier,context);
   if(packageRoots.has(specifier))return {url:packageRoots.get(specifier),shortCircuit:true};
   try{return nextResolve(specifier,context);}catch(error){
     if(available.has(specifier))return {url:available.get(specifier),shortCircuit:true};
     try{return {url:pathToFileURL(runtimeRequire.resolve(specifier)).href,shortCircuit:true};}catch{}
+    if(moduleDependencies&&!resolvingDependencies&&!specifier.startsWith('.')&&!specifier.includes(':')&&!specifier.startsWith('#')&&context.parentURL?.startsWith('file:')&&[...dependencyRoots].some(path=>context.parentURL.startsWith(path))){
+     resolvingDependencies=true;
+     try{const parent=fileURLToPath(context.parentURL),require=createRequire(context.parentURL);
+      const path=moduleDependencies.resolve(specifier,require,moduleDependencies.owner(parent));
+      return {url:pathToFileURL(path).href,shortCircuit:true};
+     }finally{resolvingDependencies=false;}
+    }
     throw error;
   }
 }});
@@ -69,6 +99,7 @@ let attachmentFiber=null, attachmentHome=null;
 let contextRoot=null;
 let hostProfile=null;
 let configLayers=[];
+let serviceDependencies,namespaceOwners=new Map();
 function profileLayers(profile,home){
  const directory=dirname(profile.configPath),layers=[];
  if(existsSync(resolve(directory,'package.json'))){
@@ -124,12 +155,41 @@ async function synchronizeSkills(roots=[]) {
  await skillFiber;skillSignature=signature;
 }
 const bundles=new Map();
+const providerOwners=new Map();
+function bundleOf(fiber){const seen=new Set();while(fiber){if(seen.has(fiber.uid))return undefined;seen.add(fiber.uid);if(fiber.bundleId)return fiber.bundleId;for(const [id,bundle] of bundles)if(bundle.fibers.some(mounted=>mounted.uid===fiber.uid))return id;const parent=fiber.parent?.fiber;if(parent===fiber)break;fiber=parent;}return undefined;}
+function ownedProviderIds(id){return [...providerOwners].filter(([,owners])=>[...owners.values()].some(fiber=>bundleOf(fiber)===id)).map(([provider])=>provider);}
+// Cordis traces fiber objects through caller contexts. Match stable runtime uids,
+// since application metadata on a returned fiber is not shared by every trace.
+for(const method of ['registerAdapter','registerConfigurableProviders']){
+ const original=LlmRuntime.prototype[method];
+ LlmRuntime.prototype[method]=function(entries,...args){
+  const owner=this.ctx.fiber,token=Symbol(method),handle=original.call(this,entries,...args);
+  const routes=values=>values.map(value=>typeof value==='string'?value:value.provider);
+  let held=routes(entries);
+  const remove=()=>{for(const provider of held){const owners=providerOwners.get(provider);owners?.delete(token);if(!owners?.size)providerOwners.delete(provider);}};
+  const add=()=>{for(const provider of held){let owners=providerOwners.get(provider);if(!owners)providerOwners.set(provider,owners=new Map());owners.set(token,owner);}};
+  add();
+  const dispose=()=>{remove();handle();};
+  dispose.replace=next=>{handle.replace(next);remove();held=routes(next);add();};
+  this.ctx.effect(()=>dispose);
+  return dispose;
+ };
+}
+async function cancelable(controller,operation){
+ let onAbort;
+ const cancelled=new Promise(resolve=>{onAbort=()=>resolve({complete:false,cancelled:true});controller.signal.addEventListener('abort',onAbort,{once:true});});
+ try{if(controller.signal.aborted)return {complete:false,cancelled:true};return await Promise.race([Promise.resolve().then(operation),cancelled]);}
+ finally{controller.signal.removeEventListener('abort',onAbort);}
+}
 const nativeApprovals=new Map(), nativeCalls=new Map();
 const callContext=new AsyncLocalStorage();
 setInterval(()=>{if(nativeCalls.size)write({event:'heartbeat'});},5000).unref();
 function requestNativeApproval(request,next){
  const requestContext=callContext.getStore();
- if(!requestContext?.approvalBridge)return next();
+ if(!requestContext?.approvalBridge){
+  if(requestContext?.action==='chat-run')return bridgeValue(write,requestContext.id,'authorize',{name:request.toolName,arguments:{reason:request.reason,callId:request.callId},agentId:request.agent.id},request.signal).then(allowed=>allowed?'allowed-once':'rejected');
+  return 'unavailable';
+ }
  const approvalId=randomUUID();
  return new Promise(resolve=>{
   const complete=outcome=>{request.signal?.removeEventListener('abort',onAbort);nativeApprovals.delete(approvalId);resolve(outcome);};
@@ -140,12 +200,19 @@ function requestNativeApproval(request,next){
   write({event:'approval',approvalId,requestId:requestContext.id,toolName:request.toolName,callId:request.callId,reason:request.reason,agentId:request.agent.id});
  });
 }
-async function dispose(){if(root){const previous=root;root=null;fibers=[];bundles.clear();await previous.fiber.dispose();}}
+async function dispose(){if(root){const previous=root;root=null;fibers=[];bundles.clear();await previous.fiber.dispose();providerOwners.clear();}}
 async function synchronize(plugins,allowPending=false){
  if(attachmentFiber){await attachmentFiber.dispose();attachmentFiber=null;}
  const desired=new Map();
+ const packages=[];
  for(const item of plugins){
+  const sourceRoot=resolve(item.root??root.microMulti.pluginRoot);
+  dependencyRoots.add(pathToFileURL(sourceRoot).href+'/');
+  const normalized=sourceRoot.replaceAll('\\','/'),nodeModules=normalized.lastIndexOf('/node_modules/');
+  if(nodeModules>=0)dependencyRoots.add(pathToFileURL(normalized.slice(0,nodeModules+14)).href+'/');
   const id=item.bundleId??'default';
+  const require=createRequire(resolve(item.root??root.microMulti.pluginRoot,'package.json'));
+  try{const manifest=require('./package.json');packages.push({name:manifest.name,require});}catch{}
   if(!desired.has(id))desired.set(id,[]);
   if(item.bundlePaths){
    const pluginRoot=item.root??root.microMulti.pluginRoot;
@@ -153,37 +220,64 @@ async function synchronize(plugins,allowPending=false){
    const packageEntry=require.resolve(item.packageName);
    packageRoots.set(item.packageName,pathToFileURL(packageEntry).href);
    const patches=item.bundlePaths.flatMap(path=>loadOverlayPatches('Micro-Multi',path));
-   const base=patches.some(patch=>patch.id==='web')?[{id:'web',name:'@deepseek-ai/dsh-web',config:{}}]:[];
+   // Resolve row-only patches from DSH's own base composition rather than
+   // inventing a per-bundle interpretation or ignoring existing-row changes.
+   const targets=new Set(patches.map(patch=>patch.id).filter(Boolean));
+   const catalog=applyEntryPatches([],loadOverlayPatches('Micro-Multi',runtimeRequire.resolve('@deepseek-ai/dsh-base/cordis.patch.yml')),console.warn);
+   const base=catalog.filter(entry=>targets.has(entry.id));
    const entries=applyEntryPatches(base,patches,console.warn);
    for(const entry of entries){
-    if(entry.disabled)continue;
+    if(entry.disabled===true)continue;
     const target=entry.name===item.packageName?packageEntry:(()=>{try{return require.resolve(entry.name);}catch{return runtimeRequire.resolve(entry.name);}})();
-    desired.get(id).push({entry:target,root:pluginRoot,config:item.configOverrides?.[entry.id]??entry.config??{},bundleId:id});
+    desired.get(id).push({entry:target,root:pluginRoot,config:item.configOverrides?.[entry.id]??entry.config??{},id:entry.id,bundleId:id,entryOptions:entry,fromBase:base.some(row=>row.id===entry.id)});
    }
    if(entries.some(entry=>entry.id==='web'))desired.get(id).push({entry:runtimeRequire.resolve('@deepseek-ai/dsh-tool-web'),root:pluginRoot,config:{searchTimeoutMs:60000,fetch:false},bundleId:id});
   }else desired.get(id).push(item);
  }
+ await serviceDependencies.prepare(packages);
  for(const [id,entry] of bundles){
   if(!desired.has(id)||entry.signature!==JSON.stringify(desired.get(id))){
-   for(const fiber of entry.fibers)await fiber.dispose();
+   for(const fiber of entry.fibers){fiber.bundleSettingsOff?.();await fiber.dispose();fiber.bundleLoaderOff?.();}
    bundles.delete(id);
   }
  }
+ const added=[];
  for(const [id,items] of desired){
   if(bundles.has(id))continue;
   const mounted=[];
   try{
    for(const item of items){
     const imported=await import(pathToFileURL(resolve(item.root??root.microMulti.pluginRoot,item.entry)).href);
-    const fiber=root.plugin(imported.default??imported,item.config??{});
+    const nativePlugin=imported.default??imported;
+    const shared=item.fromBase&&[...(root.registry.get(nativePlugin)?.fibers??[])].find(fiber=>!fiber.bundleId);
+    if(shared){shared.update({...shared.config,...item.config},true);await shared;continue;}
+    const namespace=item.id||nativePlugin.name||id;
+    const editor=root.get('bundleConfigEditor')??root.get('configEditor');
+    const base=item.config??{};
+    const config=typeof editor?.configFor==='function'?editor.configFor(id,namespace,base):base;
+    const loader=root.loader,entryId=item.id||namespace;
+    if(loader.store[entryId])throw Error('Ambiguous native Loader entry: '+entryId);
+    const options={...item.entryOptions,id:entryId,name:pathToFileURL(resolve(item.root??root.microMulti.pluginRoot,item.entry)).href,config};
+    await loader.create(options);const loaded=loader.resolve(entryId),fiber=loaded.fiber;
+    if(!fiber){loader.remove(entryId);if(loaded.disabled)continue;throw Error('Native Loader failed to activate '+namespace);}
+    fiber.bundleLoaderOff=()=>loader.remove(entryId);
+    try{await fiber.await();}catch(error){loader.remove(entryId);throw error;}
     fiber.bundleId=id; mounted.push(fiber);
+    if(typeof editor?.configFor==='function'){fiber.bundleSettingsOff=editor.register(id,namespace,fiber,base);}
    }
    for(const fiber of mounted)await fiber;
    bundles.set(id,{signature:JSON.stringify(items),fibers:mounted});
-  }catch(error){for(const fiber of mounted)await fiber.dispose();throw error;}
+   added.push(id);
+  }catch(error){for(const fiber of mounted){fiber.bundleSettingsOff?.();await fiber.dispose();fiber.bundleLoaderOff?.();}throw error;}
  }
  fibers=[...bundles.values()].flatMap(entry=>entry.fibers);
+ try{await serviceDependencies.resolve(fibers);}catch(error){
+  for(const id of added){const bundle=bundles.get(id);for(const fiber of bundle.fibers){fiber.bundleSettingsOff?.();await fiber.dispose();fiber.bundleLoaderOff?.();}bundles.delete(id);}
+  fibers=[...bundles.values()].flatMap(entry=>entry.fibers);throw error;
+ }
  if(!root.get('attachments')){attachmentFiber=root.plugin(LocalAttachmentStore,{dshHome:attachmentHome});await attachmentFiber;}
+ for(const fiber of fibers)await fiber;
+ root.get("settings")?.invalidate();
  if(!allowPending)for(const fiber of fibers){
   if(fiber.state!==2){
    const missing=Object.keys(fiber.inject).filter(name=>!root.get(name));
@@ -197,13 +291,21 @@ async function handle(request){
   process.chdir(request.workspace);
   contextRoot=resolve(request.sessionRoot??request.workspace,'native-contexts');
   attachmentHome=request.sessionRoot??request.workspace;
+  moduleDependencies=new ClientDependencies(resolve(attachmentHome,'native-dependencies'),runtimeRequire);
+  dependencyRoots.clear();dependencyRoots.add(pathToFileURL(moduleDependencies.home).href+'/');
   hostProfile=request.profile??null;
   const prepare=async context=>{
    root=context;
+  if(!root.get('dshHomePath'))root.reflect.provide('dshHomePath',(...parts)=>resolve(attachmentHome,...parts));
+  const catalog=applyEntryPatches([],loadOverlayPatches('Micro-Multi',runtimeRequire.resolve('@deepseek-ai/dsh-base/cordis.patch.yml')),console.warn);
+  serviceDependencies=new ServiceDependencies(root,runtimeRequire,catalog);
+  serviceDependencies.discover=async()=>{for(const name of available.keys())if(name.startsWith('@deepseek-ai/'))await serviceDependencies.index(name,runtimeRequire,undefined,false);};
   await root.plugin(SystemPrompt,{includeHarnessIdentity:false,includeRuntimeContext:false});
   await root.plugin(ToolRuntime,{mode:'native'});
   await root.plugin(WorkspaceService,{workspace:request.workspace,root:request.root});
   await root.plugin(PluginConnection,{});
+  if(!root.get('credentials'))await root.plugin(LocalCredentials,{dshHome:attachmentHome});
+  await root.plugin(PluginWebServer,{});
   await root.plugin(TypertRegistry,{});
   await root.plugin(TypertGateway,{});
   await root.plugin(ApiRemotes,{});
@@ -214,7 +316,10 @@ async function handle(request){
     const core=root.plugin(plugin,config); await core;
     if(core.state!==2)throw Error(`Core service ${core.name} failed to activate`);
   }
-  root.on('approval/request',requestNativeApproval);
+  // The application broker must precede the optional remote answerer: a remote
+  // waterfall can wait indefinitely when no native web client is connected.
+  root.on('approval/request',requestNativeApproval,{global:true,prepend:true});
+
   };
   if(request.profile){
    loadEnv('Micro-Multi',request.sessionRoot??request.workspace);
@@ -222,7 +327,30 @@ async function handle(request){
    configLayers=profileLayers(request.profile,request.sessionRoot??request.workspace);
    const patches=configLayers.flatMap(layer=>layer.patches);
    root=await boot('Micro-Multi',request.profile.configPath,patches,prepare);
-  }else{root=new Context();await prepare(root);}
+   // Native profile entries and application-installed bundles share the same
+   // settings directory, while each editor retains ownership of its writes.
+   await root.plugin(BundleConfigEditor,{home:attachmentHome,name:'bundleConfigEditor'});
+   const bundleEditor=root.bundleConfigEditor;await bundleEditor.load();
+   const editor=root.get('configEditor');
+   if(editor){
+    const entries=editor.entries.bind(editor),configuration=editor.configuration.bind(editor),edit=editor.edit.bind(editor);
+    editor.entries=()=>[...entries(),...bundleEditor.entries()];
+    editor.configuration=()=>[...configuration(),...bundleEditor.configuration()];
+    editor.edit=(entry,change)=>entry.bundleId?bundleEditor.edit(entry,change):edit(entry,change);
+   }else root.reflect.provide('configEditor',bundleEditor);
+  }else{
+   root=new Context();await prepare(root);
+   await root.plugin(BundleConfigEditor,{home:attachmentHome});await root.configEditor.load();
+   root.reflect.provide('profileContext',{home:attachmentHome,name:'application-bundles'});
+   await root.plugin(Loader,{baseUrl:pathToFileURL(resolve(request.root,'package.json')).href});
+  }
+  if(root.get('configEditor')&&root.get('profileContext')&&!root.get('settings'))await root.plugin(BundleSettingsForms,{});
+  if(request.profile&&root.get('settings')){
+   const settings=root.settings,original=settings.schema.bind(settings),cache=new WeakMap();
+   settings.schema=entry=>{const schema=original(entry);if(!entry.bundleId||!schema)return schema;let form=cache.get(schema);if(!form){form=new Schema(schema.toJSON());form.meta.volatile=true;cache.set(schema,form);}return form;};
+  }
+  namespaceOwners=await installNamespaceSettings(root,attachmentHome);
+  await root.plugin(SettingsController,{});
   await synchronizeSkills(request.skillRoots);
   await synchronize(request.plugins,request.allowPending??false);
   for(const [plugin,providerName] of [[SpawnInProcess,'spawn'],[ForkInProcess,'fork']]){
@@ -243,7 +371,7 @@ async function handle(request){
  }
  if(request.action==='unmount'){
   const entry=bundles.get(request.bundleId);
-  if(entry){for(const fiber of entry.fibers)await fiber.dispose();bundles.delete(request.bundleId);}
+  if(entry){for(const fiber of entry.fibers){fiber.bundleSettingsOff?.();await fiber.dispose();fiber.bundleLoaderOff?.();}bundles.delete(request.bundleId);}
   fibers=[...bundles.values()].flatMap(entry=>entry.fibers);
   return {unmounted:true};
  }
@@ -251,24 +379,50 @@ async function handle(request){
  if(request.action==='chat-run')return await runNativeChat(root,request,write,nativeCalls);
  if(request.action==='schemas')return {tools:root.tools.schemas()};
  if(request.action==='plugin-rpc')return {result:await root.connection.call(request.channel,request.method,request.payload)};
+ if(request.action==='plugin-index')return {html:root.webServer.renderIndex(request.html)};
+ if(request.action==='plugin-http-endpoint'){await root.webServer.ready;return {url:'http://127.0.0.1:'+root.webServer.server.address().port};}
+ if(request.action==='plugin-http')return await root.webServer.request(request);
+ if(request.action==='plugin-attachment'){
+  const stored=await root.attachments.readImage(request.reference);
+  return {attachment:stored.ref,data:Buffer.from(stored.data).toString('base64')};
+ }
+ if(request.action==='plugin-capabilities')return {providesModels:Boolean(ownedProviderIds(request.pluginId).length),settingsNamespaces:[...new Set([...(root.get('bundleConfigEditor')??root.get('configEditor'))?.entries().filter(entry=>entry.bundleId===request.pluginId).map(entry=>entry.options.id)??[],...[...namespaceOwners].filter(([,fiber])=>bundleOf(fiber)===request.pluginId).map(([ns])=>ns)])]};
  if(request.action==='plugin-rpc-stream'){
-  if(request.channel!=='/api')throw Error('Remote streams require the shared API channel');
   const controller=new AbortController();nativeCalls.set(request.streamId??String(request.id),controller);
   try{
-   const empty={async *[Symbol.asyncIterator](){}},stream=await root.typertGateway.wireStream.open(request.method,request.payload,empty,root.connection.operator,controller.signal);
-   for await(const value of stream)write({event:'plugin-stream-value',requestId:request.id,streamId:request.streamId,value});
-   return {complete:true};
+   return await cancelable(controller,async()=>{
+    const empty={async *[Symbol.asyncIterator](){}},stream=request.channel==='/api'?await root.typertGateway.wireStream.open(request.method,request.payload,empty,root.connection.operator,controller.signal):await root.connection.dispatch(request.channel,request.method,request.payload,controller.signal);
+    if(!stream?.[Symbol.asyncIterator])throw Error('Plugin RPC endpoint did not return a stream');
+    for await(const value of stream){if(controller.signal.aborted)break;write({event:'plugin-stream-value',requestId:request.id,streamId:request.streamId,value});}
+    return {complete:true};
+   });
   }finally{nativeCalls.delete(request.streamId??String(request.id));}
  }
  if(request.action==='plugin-models'){
-  const providers=root.llm.listProviders();
+  const owned=request.pluginId?new Set(ownedProviderIds(request.pluginId)):null;
+  const providers=root.llm.listProviders().filter(provider=>!owned||owned.has(provider.id));
+  const failures=[];
   return {providers,models:(await Promise.all(providers.map(async provider=>{
-   try{return await root.llm.listModels(provider.id);}catch{return [];}
-  }))).flat()};
+   let timer;
+   const discover=async()=>{const models=await root.llm.listModels(provider.id);return await Promise.all(models.map(async model=>{try{return {...model,...await root.llm.resolveModelInfo(provider.id,model.id,AbortSignal.timeout(10000))};}catch{return model;}}));};
+   try{return await Promise.race([discover(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Model discovery timed out')),15000);})]);}
+   catch(error){failures.push({provider:provider.id,error:String(error.message??error)});return [];}
+   finally{clearTimeout(timer);}
+  }))).flat(),failures};
  }
  if(request.action==='plugin-model-stream'){
   const controller=new AbortController();nativeCalls.set(request.streamId??String(request.id),controller);
-  try{for await(const chunk of root.llm.stream({...request.options,signal:controller.signal}))write({event:'plugin-model-chunk',requestId:request.id,streamId:request.streamId,chunk});return {complete:true};}
+  try{
+   let imageBytes=0;
+   const messages=[];
+   for(const message of request.options.messages){const content=[];for(const block of message.content){
+    if(block.type!=='micro-multi-image'){content.push(block);continue;}
+    const data=Buffer.from(block.data,'base64');imageBytes+=data.length;
+    if(data.length>10*1024*1024||imageBytes>25*1024*1024)throw Error('Image input exceeds attachment limits');
+    const attachment=await root.attachments.saveImage({data,mediaType:block.mediaType});content.push({type:'image',attachment});
+   }messages.push({...message,content});}
+   return await cancelable(controller,async()=>{for await(const chunk of root.llm.stream({...request.options,messages,signal:controller.signal})){if(controller.signal.aborted)break;write({event:'plugin-model-chunk',requestId:request.id,streamId:request.streamId,chunk});}return {complete:true};});
+  }
   finally{nativeCalls.delete(request.streamId??String(request.id));}
  }
  if(request.action==='bundle-config'){
@@ -276,11 +430,20 @@ async function handle(request){
   for(const [index,item] of request.plugins.entries()){
    if(item.bundlePaths){
     const patches=item.bundlePaths.flatMap(path=>loadOverlayPatches('Micro-Multi',path));
-    const base=patches.some(patch=>patch.id==='web')?[{id:'web',name:'@deepseek-ai/dsh-web',config:{}}]:[];
+    // Resolve row-only patches from DSH's own base composition rather than
+   // inventing a per-bundle interpretation or ignoring existing-row changes.
+   const targets=new Set(patches.map(patch=>patch.id).filter(Boolean));
+   const catalog=applyEntryPatches([],loadOverlayPatches('Micro-Multi',runtimeRequire.resolve('@deepseek-ai/dsh-base/cordis.patch.yml')),console.warn);
+   const base=catalog.filter(entry=>targets.has(entry.id));
     for(const entry of applyEntryPatches(base,patches,console.warn)){
-     if(!entry.disabled)entries.push({key:`${index}:${entry.id}`,name:entry.name,config:item.configOverrides?.[entry.id]??entry.config??{}});
+     if(!entry.disabled)entries.push({key:`${index}:${entry.id}`,name:entry.name,config:(root.get('bundleConfigEditor')??root.configEditor).configFor(request.pluginId??item.bundleId??'default',entry.id,item.configOverrides?.[entry.id]??entry.config??{})});
     }
-   }else entries.push({key:String(index),name:item.entry,config:item.config??{}});
+   }else{
+    const bundleId=request.pluginId??item.bundleId??'default',fiber=bundles.get(bundleId)?.fibers[index];
+    const editor=root.get('bundleConfigEditor')??root.configEditor;
+    const namespace=item.id??fiber?.name??bundleId;
+    entries.push({key:String(index),name:item.entry,config:editor.configFor(bundleId,namespace,item.config??{})});
+   }
   }
   return {entries};
  }
@@ -322,26 +485,27 @@ const active=new Set(),queuedCalls=new Set(),cancelledCalls=new Set();
 const blockingActive=new Set();
 const executePacket=async request=>{
  try{
-  if(request.action==='call'&&cancelledCalls.has(String(request.id)))throw Error('Native call cancelled before dispatch');
+  if(cancelledCalls.has(String(request.streamId??request.id)))throw Error('Native call cancelled before dispatch');
   if(closing&&request.action==='call')throw Error('Native Host is closing');
-  const result=await callContext.run(request,()=>handle(request));write({id:request.id,result});
+  const result=await callContext.run(request,()=>handle(request));write({id:request.id,result},['plugin-http','plugin-attachment','plugin-index'].includes(request.action)?36*1024*1024:500000);
  }catch(error){console.error(error.stack??error);write({id:request?.id,error:String(error.message??error).slice(0,2000)});}
- finally{queuedCalls.delete(String(request.id));cancelledCalls.delete(String(request.id));}
+ finally{queuedCalls.delete(String(request.streamId??request.id));cancelledCalls.delete(String(request.streamId??request.id));}
 };
 const input=createInterface({input:process.stdin,crlfDelay:Infinity});
 input.on('line',line=>{
- if(Buffer.byteLength(line)>500000){process.exit(65);return;}
+ if(Buffer.byteLength(line)>36*1024*1024){process.exit(65);return;}
  let packet;try{packet=JSON.parse(line);}catch{write({error:'Malformed Cordis request'});return;}
+ if(!['plugin-http','plugin-model-stream','plugin-index'].includes(packet.action)&&Buffer.byteLength(line)>500000){write({id:packet.id,error:'Cordis request exceeds 500 KB'});return;}
  if(packet.action==='bridge-response'||packet.action==='bridge-chunk'){receiveBridge(packet);return;}
  if(packet.action==='approval-response'){
   nativeApprovals.get(packet.approvalId)?.(['allowed-once','rejected','cancelled','unavailable'].includes(packet.outcome)?packet.outcome:'unavailable');return;
  }
- if(packet.action==='cancel-call'){if(queuedCalls.has(String(packet.id)))cancelledCalls.add(String(packet.id));nativeCalls.get(String(packet.id))?.abort();return;}
+ if(packet.action==='cancel-call'){const id=String(packet.id);cancelledCalls.add(id);setTimeout(()=>cancelledCalls.delete(id),60000).unref();nativeCalls.get(id)?.abort();return;}
  if(packet.action==='dispose')for(const controller of nativeCalls.values())controller.abort();
- if(packet.action==='call')queuedCalls.add(String(packet.id));
+ if(['call','plugin-rpc-stream','plugin-model-stream'].includes(packet.action))queuedCalls.add(String(packet.streamId??packet.id));
  queue=queue.then(async()=>{
   await barrier;
-  let parallel=['plugin-rpc','plugin-rpc-stream','plugin-model-stream'].includes(packet.action);
+  let parallel=['plugin-http','plugin-rpc','plugin-rpc-stream','plugin-model-stream','plugin-models','plugin-attachment'].includes(packet.action);
   if(packet.action==='call'&&root){
    try{parallel=root.tools.executionMode({callId:String(packet.id),name:packet.name,arguments:packet.arguments??{},signal:AbortSignal.timeout(1000)}).kind==='parallel';}catch{}
   }

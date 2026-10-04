@@ -3,11 +3,11 @@
   <h1>Micro-Multi</h1>
   <p><strong>让一支 AI Agent 团队，在你的本地工作区协作。</strong></p>
   <p><a href="README.md">English</a> · 简体中文</p>
-  <p><a href="https://lkdenchin.github.io/Micro-Multi/zh/">官网</a> · <a href="#快速安装">安装</a> · <a href="#开始使用">开始使用</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme-zh-cn.html">文档</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
+  <p><a href="https://lkdenchin.github.io/Micro-Multi/zh/">官网</a> · <a href="#快速安装">安装</a> · <a href="#开始使用">开始使用</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme-zh-cn.html">文档</a> · <a href="CONTRIBUTING.zh-CN.md">参与贡献</a></p>
   <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
 </div>
 
-Micro-Multi 将对话、代码、工具和 Agent 团队放进同一个桌面工作台。描述你想完成的任务，主 Agent 可以拆分工作、创建专业成员、并行执行、审查结果，并继续推进，直到你可以检查交付内容。
+Micro-Multi 将对话、代码、工具和 Agent 团队放进同一个桌面工作台。描述你想完成的任务，主 Agent 先提交团队方案供你审核，确认后启动专业成员、跟踪并行任务并审查结果。
 
 连接自己的 OpenAI 兼容模型接口，为不同 Agent 选择模型，直接使用本地 Git 项目。你可以跟踪每个成员的操作、查看文件改动，并保留对话，在下一次打开应用时继续工作。
 
@@ -27,9 +27,20 @@ Micro-Multi 将对话、代码、工具和 Agent 团队放进同一个桌面工�
 
 ---
 
+## 当前源码更新
+
+2026-10-05 源码更新保留包版本 0.1.0，不发布新安装包或 Release。现有下载仍为已发布基线，使用本次变化需运行或构建当前源码。参见[当前变化](docs/CURRENT_CHANGES.zh-CN.md)及[更新记录](CHANGELOG.zh-CN.md)。
+
+- 原生 Cordis Loader 与 ClientModuleSystem 统一解析声明的服务/客户端依赖、缺失库和包内构建工具。
+- 插件设置仅在详情显示；Schema 表单及原始命名空间设置 API 校验、持久化并恢复配置，运行时源码版本使旧客户端/宿主缓存失效。
+- 浏览器兼容构建、WebSocket 订阅和受限 portal 改善插件加载与启动。
+- 每版团队方案单独确认，保留成员选定模型；模型参数协商、具体错误诊断及持久化流合并改善执行。
+
+---
+
 ## 快速安装
 
-在 [Releases 页面](https://github.com/LKDenchin/Micro-Multi/releases/latest) 下载对应系统的软件包。自行构建请参考[桌面构建指南](docs/DESKTOP_RELEASE.md)。
+在 [Releases 页面](https://github.com/LKDenchin/Micro-Multi/releases/latest) 下载对应系统的软件包。自行构建请参考[桌面构建指南](docs/DESKTOP_RELEASE.zh-CN.md)。
 
 | 平台 | 下载 |
 | --- | --- |
@@ -58,7 +69,7 @@ chmod +x Micro-Multi-0.1.0-x86_64.AppImage
 
 没有 FUSE 时，可添加 `--appimage-extract-and-run` 运行。
 
-Ubuntu 24.04 及以上系统，请按 [AppImage 安装指南](docs/DESKTOP_RELEASE.md#ubuntu-appimage-sandbox-policy)启用应用专用的用户命名空间策略。
+Ubuntu 24.04 及以上系统，请按 [AppImage 安装指南](docs/DESKTOP_RELEASE.zh-CN.md#ubuntu-appimage-沙箱策略)启用应用专用的用户命名空间策略。
 
 桌面包内置 Python 和 Node。Git 仓库操作需要安装 Git；Docker 和外部扩展工具按需另行安装。Linux 模型密钥存储需要正在运行的 Secret Service 凭据库，例如 GNOME Keyring。下载后对照 `SHA256SUMS.txt` 校验；当前 Windows 安装包未签名。
 
@@ -69,7 +80,7 @@ Ubuntu 24.04 及以上系统，请按 [AppImage 安装指南](docs/DESKTOP_RELEA
 1. **连接模型。** 在“模型”中输入 API 地址、模型 ID 和密钥，检测连接。
 2. **打开项目。** 新建项目或导入本地 Git 仓库。
 3. **描述目标。** 创建对话，例如：“给这个 API 添加分页，并验证行为。”
-4. **让团队工作。** 需要专业分工时选择多 Agent 协作，也可以只使用主 Agent。
+4. **审核团队方案。** 选择多 Agent 协作，调整职责和模型，确认当前方案后才启动成员；也可只使用主 Agent。
 5. **检查结果。** 查看文件改动、工具记录、审查和验证，再使用交付内容。
 
 你可以调整成员模型和职责、添加附件，并通过后续对话给出反馈。项目和对话保存在本地，关闭应用后仍可继续。
@@ -82,17 +93,17 @@ Ubuntu 24.04 及以上系统，请按 [AppImage 安装指南](docs/DESKTOP_RELEA
 
 Skills 为 Agent 提供可复用的工作指令。项目技能可从 `.agents/skills/` 发现，也可以通过工作台添加用户技能。MCP 服务和插件连接额外工具；在设置中安装可信扩展，并检查它们请求的权限。
 
-详见[自主协作](docs/AUTONOMOUS_COLLABORATION.md)和[扩展指南](docs/NATIVE_CORDIS.md)。
+详见[自主协作](docs/AUTONOMOUS_COLLABORATION.zh-CN.md)和[扩展指南](docs/NATIVE_CORDIS.zh-CN.md)。
 
 ---
 
 ## deepseek-harness 插件体系
 
-Micro-Multi 使用官方 dsh Cordis 与工具运行时。在“设置 → 扩展”加载已构建的 dsh Cordis Host 插件包后，主 Agent 和专业成员都可以使用其工具。插件可注册服务、注入依赖、校验配置与工具参数、发布事件，并在禁用或移除时释放资源。
+Micro-Multi 使用官方 dsh Cordis 与工具运行时。在“自定义 → 插件”加载已构建的 dsh Cordis Host 插件包后，主 Agent 和专业成员都可以使用其工具。插件可注册服务、注入依赖、校验配置与工具参数、发布事件，并在禁用或移除时释放资源。
 
 每个插件包在工作区内保持独立状态。宿主提供 `tools`、`systemPrompt` 和 `microMulti` 服务，`microMulti.workspace` 与 `microMulti.pluginRoot` 分别提供工作区和插件目录。开发插件时，可使用这些宿主服务。
 
-可以直接体验仓库中的 [`examples/native-cordis`](examples/native-cordis)，或按照 [dsh 插件指南](docs/NATIVE_CORDIS.md)加载自己的插件包。插件框架详见 [dsh 仓库](https://github.com/deepseek-ai/deepseek-harness)。
+可以直接体验仓库中的 [`examples/native-cordis`](examples/native-cordis)，或按照 [dsh 插件指南](docs/NATIVE_CORDIS.zh-CN.md)加载自己的插件包。插件框架详见 [dsh 仓库](https://github.com/deepseek-ai/deepseek-harness)。
 
 ---
 
@@ -145,19 +156,19 @@ npm run desktop
 
 | 指南 | 内容 |
 | --- | --- |
-| [桌面构建与发布](docs/DESKTOP_RELEASE.md) | 构建安装包、运行检查和发布 |
-| [自主协作](docs/AUTONOMOUS_COLLABORATION.md) | 任务委派、并行工作、进度和审查 |
-| [扩展](docs/NATIVE_CORDIS.md) | Cordis Host 包与可运行示例 |
-| [持久化与恢复](docs/DURABLE_TURNS_AND_MODEL_RECOVERY.md) | 保存对话、中断和恢复 |
-| [安全](SECURITY.md) | 数据、命令权限和漏洞报告 |
-| [贡献指南](CONTRIBUTING.md) | 开发环境、检查和 Pull Request |
-| [更新记录](CHANGELOG.md) | 版本历史 |
+| [桌面构建与发布](docs/DESKTOP_RELEASE.zh-CN.md) | 构建安装包、运行检查和发布 |
+| [自主协作](docs/AUTONOMOUS_COLLABORATION.zh-CN.md) | 任务委派、并行工作、进度和审查 |
+| [扩展](docs/NATIVE_CORDIS.zh-CN.md) | Cordis Host 包与可运行示例 |
+| [持久化与恢复](docs/DURABLE_TURNS_AND_MODEL_RECOVERY.zh-CN.md) | 保存对话、中断和恢复 |
+| [安全](SECURITY.zh-CN.md) | 数据、命令权限和漏洞报告 |
+| [贡献指南](CONTRIBUTING.zh-CN.md) | 开发环境、检查和 Pull Request |
+| [更新记录](CHANGELOG.zh-CN.md) | 版本历史 |
 
 ---
 
 ## 参与贡献
 
-欢迎贡献修复、测试、翻译、文档和扩展。请阅读[贡献指南](CONTRIBUTING.md)和[行为准则](CODE_OF_CONDUCT.md)，并说明实际执行的验证。
+欢迎贡献修复、测试、翻译、文档和扩展。请阅读[贡献指南](CONTRIBUTING.zh-CN.md)和[行为准则](CODE_OF_CONDUCT.zh-CN.md)，并说明实际执行的验证。
 
 ```bash
 python -m pytest -q
@@ -167,7 +178,7 @@ python -m mypy src/masp
 
 ## 社区
 
-通过[Issues](https://github.com/LKDenchin/Micro-Multi/issues) 报告可复现的问题或提出功能建议，提供版本、系统、复现步骤和脱敏日志。交流使用方法与想法可前往 [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions)。漏洞采用[安全政策](SECURITY.md)中的私密渠道。
+通过[Issues](https://github.com/LKDenchin/Micro-Multi/issues) 报告可复现的问题或提出功能建议，提供版本、系统、复现步骤和脱敏日志。交流使用方法与想法可前往 [Discussions](https://github.com/LKDenchin/Micro-Multi/discussions)。漏洞采用[安全政策](SECURITY.zh-CN.md)中的私密渠道。
 
 会话和上传内容保存在本地，但配置的模型服务和启用的扩展可能接收执行任务所需的上下文。本地命令在你的机器运行，权限检查不等于操作系统沙箱。
 
@@ -175,4 +186,4 @@ python -m mypy src/masp
 
 ## 许可证
 
-[Apache-2.0](LICENSE)。第三方组件保留各自许可证和声明，详见 [NOTICE](NOTICE)及[运行时来源](docs/UPSTREAM_RUNTIME_PROVENANCE.md)。
+[Apache-2.0](LICENSE)。第三方组件保留各自许可证和声明，详见 [NOTICE](NOTICE)及[运行时来源](docs/UPSTREAM_RUNTIME_PROVENANCE.zh-CN.md)。

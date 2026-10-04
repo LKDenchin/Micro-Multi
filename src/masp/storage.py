@@ -7,6 +7,7 @@ import json
 import sqlite3
 import threading
 import uuid
+import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -29,6 +30,10 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         self.lock = threading.RLock()
+        # Keep WAL open across short transactions; closing the last connection
+        # otherwise checkpoints the database on every streamed token.
+        self._wal_anchor = sqlite3.connect(self.path, timeout=30, check_same_thread=False)
+        self._close_anchor = weakref.finalize(self, self._wal_anchor.close)
         with self.connect() as db:
             db.executescript("""
                 PRAGMA journal_mode=WAL;
@@ -41,6 +46,10 @@ class Store:
                     data TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS events_run ON events(run_id,sequence);
             """)
+
+    def close(self) -> None:
+        with self.lock:
+            self._close_anchor()
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:

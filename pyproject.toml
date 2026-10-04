@@ -9,7 +9,7 @@ description = "Local multi-agent desktop workspace compatible with deepseek-harn
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
-dependencies = ["fastapi>=0.115,<1", "pydantic>=2.10,<3", "uvicorn>=0.34,<1", "httpx>=0.28,<1", "keyring>=25,<27", "mcp>=2.2,<3", "httpx2>=2.13,<3", "jsonschema>=4.26,<5"]
+dependencies = ["fastapi>=0.115,<1", "pydantic>=2.10,<3", "uvicorn>=0.34,<1", "wsproto>=1.2,<2", "httpx>=0.28,<1", "keyring>=25,<27", "mcp>=2.2,<3", "httpx2>=2.13,<3", "jsonschema>=4.26,<5"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "mypy>=1.15,<3", "ruff>=0.11,<1", "build>=1.2,<2"]
@@ -28,7 +28,7 @@ Releases = "https://github.com/LKDenchin/Micro-Multi/releases"
 where = ["src"]
 
 [tool.setuptools.package-data]
-masp = ["web/*", "native/*.mjs", "_vendor/deerflow/LICENSE", "_vendor/deerflow/PROVENANCE.md"]
+masp = ["web/*", "native/*.mjs", "native/vendor/*/*.mjs", "native/vendor/*/LICENSE", "native/vendor/*/provenance.json", "_vendor/deerflow/LICENSE", "_vendor/deerflow/PROVENANCE.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

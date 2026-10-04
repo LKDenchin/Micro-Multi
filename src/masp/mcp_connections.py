@@ -36,6 +36,7 @@ class Connection:
                 while True:
                     method, args, kwargs, future = await self.queue.get()
                     if future.cancelled():
+                        self.pending.discard(future)
                         continue
 
                     async def execute(
@@ -83,6 +84,10 @@ class Connection:
             self.pending.clear()
 
     async def request(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        if self.task.done():
+            raise RuntimeError("MCP connection closed before dispatch; retry explicitly")
+        if len(self.pending) >= 128:
+            raise RuntimeError("MCP pending request capacity reached")
         self.last_used = time.monotonic()
         future = asyncio.get_running_loop().create_future()
         self.pending.add(future)

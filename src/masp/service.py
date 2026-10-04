@@ -104,6 +104,7 @@ class Service:
 
         close_native_hosts(self.store)
         self.instance_lock.close()
+        self.store.close()
 
     def create_project(self, request: ProjectCreate) -> dict[str, Any]:
         from masp.plugin_tools import get_dsh_settings
@@ -953,7 +954,7 @@ class Service:
 
         return {
             "version": __version__,
-            "build_id": "2026-10-03-v20-compact-extension-settings",
+            "build_id": "2026-10-04-v22-plugin-websocket",
             "builtin_mcp_ready": True,
             "open_code_review": ocr_engine_status(),
             "docker_available": shutil.which("docker") is not None,

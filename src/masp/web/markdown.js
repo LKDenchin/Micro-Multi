@@ -619,6 +619,8 @@ export function renderMarkdownToHtml(rawText) {
 
 export function renderMarkdownElement(container, rawText) {
   if (!container) return;
+  if (container.__markdownSource === rawText) return;
+  container.__markdownSource = rawText;
   container.classList.add('masp-markdown');
   container.innerHTML = renderMarkdownToHtml(rawText);
   container.querySelectorAll('.md-code-copy').forEach((btn) => {

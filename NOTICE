@@ -13,4 +13,7 @@ Python: resources/python/LICENSE.txt (Windows), resources/python/licenses/
 (Linux standalone build), and installed dependency notices.
 Open Code Review and other npm dependencies retain their package notices.
 
+Unmodified legacy DSH namespace settings: src/masp/native/vendor/
+dsh-settings-namespace/LICENSE and provenance.json.
+
 Third-party names identify upstream projects; no endorsement is implied.

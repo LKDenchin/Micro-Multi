@@ -511,7 +511,13 @@ def _safe_file(root: Path, relative: str) -> Path:
         raise ValueError("目标不是普通文件")
     parts = {part.casefold() for part in path.relative_to(root.resolve()).parts}
     name = path.name.casefold()
-    if ".git" in parts or ".masp" in parts or name.startswith(".env"):
+    relative_parts = path.relative_to(root.resolve()).parts
+    plan_document = (
+        len(relative_parts) == 4
+        and relative_parts[:2] == (".masp", "team-plans")
+        and name in {"requirements.md", "design.md", "tasks.md"}
+    )
+    if ".git" in parts or (".masp" in parts and not plan_document) or name.startswith(".env"):
         raise ValueError("此类文件不能通过聊天工具读取")
     if name.endswith((".pem", ".key", ".p12", ".pfx")) or "secret" in name:
         raise ValueError("此类文件不能通过聊天工具读取")

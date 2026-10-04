@@ -1,4 +1,4 @@
-import { setLocale, installLocaleObserver, translateUiText } from './i18n.js?v=42';
+import { setLocale, installLocaleObserver, translateUiText } from './i18n.js?v=43';
 import { icon, installIcons } from './icons.js';
 import { renderMarkdownElement, visibleAssistantContent } from './markdown.js?v=43';
 import './native-form.js';
@@ -248,7 +248,7 @@ function updateActivityMarkup(root, html) {
       for (const attr of Array.from(next.attributes)) {
         if (!['open', 'hidden'].includes(attr.name) && current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
       }
-      sync(current, next);
+      if (!current.classList?.contains('plugin-tool-view')) sync(current, next);
     });
     while (parent.childNodes.length > desired.length) parent.lastChild.remove();
   }
@@ -318,6 +318,7 @@ function createOrUpdateToolGroup(groupEl, events) {
         (detailBody ? '<svg class="tool-group-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>' : '') +
       '</div>' +
       detailHtml +
+      (ev.native_result ? '<div class="plugin-tool-view plugin-slot-host"></div>' : '') +
     '</div>';
   }).join('');
 
@@ -330,6 +331,16 @@ function createOrUpdateToolGroup(groupEl, events) {
     '<div class="tool-activity-list">' + stepsHtml + '</div>');
   details.open = preserveOpen;
   restoreActivityView(details, viewState);
+  events.forEach((event,index)=>{
+    if (!event.native_result || event.status === 'running') return;
+    const item=details.querySelector('[data-step-index="'+index+'"]');
+    if(!item)return;
+    let target=item.querySelector('.plugin-tool-view');
+    if(!target){target=document.createElement('div');target.className='plugin-tool-view plugin-slot-host';item.append(target);}
+    const result=event.native_result;
+    const block={kind:'tool',phase:'result',name:event.name,callId:event.call_id||String(index),call:{name:event.name,argsRaw:event.arguments||'{}'},content:result.content||[],isError:Boolean(result.isError),error:result.error,meta:result.meta,subCalls:[]};
+    for(const entry of conversationPluginMounts.values())if(entry.dispose.renderToolView?.(target,{callId:block.callId,toolName:event.name,block,phase:'result',openFile:path=>void openWorkspaceFile(path)}))break;
+  });
   return details;
 }
 
@@ -348,9 +359,7 @@ function createOrUpdateThinkingGroup(groupEl, thinkingData) {
   const preserveOpen = details.open;
   const viewState = captureActivityView(details);
   const secs = thinkingData.seconds ?? Math.max(0.1, Number(((thinkingData.duration_ms || 100) / 1000).toFixed(1)));
-  const titleText = isRunning
-    ? '思考中'
-    : '已思考 ' + secs + 's';
+  const titleText = thinkingData.kind === 'work' ? (isRunning ? '工作中' : '协作方案已生成') : (isRunning ? '思考中' : '已思考 ' + secs + 's');
   updateActivityMarkup(details,
     '<summary class="tool-activity-summary">' +
       '<span class="tool-group-icons">' + icon('sparkle') + '</span>' +
@@ -1168,6 +1177,17 @@ async function openWorkspaceFile(path, switchTab = true) {
       encodeURIComponent(path));
     selectedWorkspaceFile = file.path;
     const info = splitFilePathInfo(file.path);
+    if (/\.(md|markdown)$/i.test(file.path)) {
+      const preview = $('#workspace-file-content');
+      preview.replaceChildren();
+      const body = document.createElement('div');
+      body.className = 'markdown-body workspace-markdown-preview';
+      renderMarkdownElement(body, file.content ?? '');
+      preview.append(body);
+      preview.hidden = false;
+      if (switchTab) { document.body.classList.remove('inspector-closed'); showWorkspacePanel('files', false); }
+      return;
+    }
     const rawLines = String(file.content ?? '').split('\n');
     const rowsHtml = rawLines.map((lineText, idx) =>
       renderIdeCodeRowHtml(file.path, { kind: 'ctx', old_lineno: idx + 1, new_lineno: idx + 1, text: lineText }, info.ext)
@@ -1308,7 +1328,8 @@ async function runSelectedFilesReview(explicitPaths = null) {
       : [{ id: 'env-default', name: '默认模型', model: 'DeepSeek' }]
     ).map((p) => {
       const sel = p.id === activeReviewProfile ? ' selected' : '';
-      const label = (p.model && p.model !== p.name) ? (p.name + ' · ' + p.model) : (p.name || p.model);
+      const display = modelDisplayName(p);
+      const label = (display && display !== p.name) ? (p.name + ' · ' + display) : (p.name || display);
       return '<option value="' + escapeHtml(p.id) + '"' + sel + '>' + escapeHtml(label) + '</option>';
     }).join('');
     const ocrConsoleCard =
@@ -1636,6 +1657,7 @@ function applyThemeAndDensity(themeCfg = {}) {
   const mode = themeCfg.mode || 'dark';
   const prefersLight = window.matchMedia?.('(prefers-color-scheme: light)')?.matches;
   const isLight = mode === 'light' || (mode === 'system' && prefersLight);
+  document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
   document.body.classList.toggle('theme-light', isLight);
   document.body.classList.toggle('compact-density', Boolean(themeCfg.compactDensity));
 }
@@ -1958,7 +1980,10 @@ function updateAccessDescription(mode) {
 function updateAccessControl(mode = $('#access-select').value) {
   const labels = { read: '请求批准', files: '帮我批准', commands: '完全访问' };
   $('#access-label').textContent = labels[mode] || labels.read;
-  if ($('#access-trigger')) $('#access-trigger').dataset.mode = mode;
+  if ($('#access-trigger')) {
+    $('#access-trigger').dataset.mode = mode;
+    $('#access-trigger').setAttribute('aria-label', labels[mode] || labels.read);
+  }
   document.querySelectorAll('[data-access-value]').forEach((option) => {
     const selected = option.dataset.accessValue === mode;
     option.setAttribute('aria-selected', String(selected));
@@ -1973,6 +1998,8 @@ function refreshSelectMenu(select) {
   if (!menu || !trigger) return;
   const selected = [...select.options].find((option) => option.value === select.value) || select.options[0];
   trigger.querySelector('.select-trigger-label').textContent = selected?.textContent.trim() || '选择…';
+  trigger.title = selected?.textContent.trim() || '';
+  if (select.id === 'chat-model-select') trigger.setAttribute('aria-label', '选择模型：' + trigger.title);
   trigger.disabled = select.disabled;
   menu.innerHTML = '';
   [...select.options].forEach((option) => {
@@ -1994,7 +2021,7 @@ function refreshSelectMenus() {
 
 function enhanceSelect(select) {
   if (select.dataset.selectMenuId || select.id === 'access-select' ||
-      select.closest('.project-select-hidden')) return;
+      select.closest('.project-select-hidden, .plugin-slot-host, .plugin-client-root, #plugin-runtime-roots')) return;
   const id = 'select-menu-' + (++selectMenuNumber);
   select.dataset.selectMenuId = id;
   select.classList.add('native-select-hidden');
@@ -2028,6 +2055,7 @@ function enhanceSelect(select) {
 
 function installSelectMenus() {
   const initialize = (root = document) => {
+    if (root.closest?.('.masp-markdown, .plugin-client-root')) return;
     if (root.matches?.('select')) enhanceSelect(root);
     root.querySelectorAll?.('select').forEach(enhanceSelect);
   };
@@ -2124,6 +2152,12 @@ function syncTrackedSelectorLabels() {
   lastTrackedLabels.access = getAccessModeLabel($('#access-select')?.value);
 }
 
+function modelDisplayName(profile) {
+  let display = profile?.display_model || profile?.model || '';
+  try { const wire = JSON.parse(display); if (Array.isArray(wire) && wire.length === 2) display = wire[1]; } catch {}
+  return String(display);
+}
+
 function renderSelectors() {
   projects = (projects || []).filter((p) => !isSpuriousConvItem(p));
   const currentProject = draftProjectId || $('#project-select').value;
@@ -2133,7 +2167,7 @@ function renderSelectors() {
   renderContextProjects($('#context-project-search')?.value || '');
   updateContextLabels();
   const options = profiles.map((p) =>
-    '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + ' · ' + escapeHtml(p.model) + '</option>'
+    '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + ' · ' + escapeHtml(modelDisplayName(p)) + '</option>'
   ).join('');
   for (const selector of ['#chat-model-select', '#main-profile']) {
     const element = $(selector);
@@ -2155,7 +2189,7 @@ function renderSelectors() {
 function renderModelList() {
   const html = profiles.map((profile) =>
     '<div class="model-card"><strong>' + escapeHtml(profile.name) + '</strong><small>' +
-    escapeHtml(profile.model) + '<br>' + escapeHtml(profile.base_url) + '</small><div class="row-actions">' +
+    escapeHtml(modelDisplayName(profile)) + '<br>' + escapeHtml(profile.base_url) + '</small><div class="row-actions">' +
     '<button type="button" data-probe="' + escapeHtml(profile.id) + '">检测连接</button>' +
     (profile.id === 'env-default' ? '' : '<button type="button" data-edit-profile="' + escapeHtml(profile.id) + '">编辑</button>') +
     '</div><p class="feedback model-card-feedback" data-probe-result="' + escapeHtml(profile.id) + '" role="status"></p></div>'
@@ -2168,7 +2202,7 @@ function agentCard(agent) {
   const options = '<option value=""' + (!agent.model_profile_id ? ' selected' : '') + '>跟随当前主模型</option>' + profiles.map((profile) =>
     '<option value="' + escapeHtml(profile.id) + '"' +
     (profile.id === agent.model_profile_id ? ' selected' : '') + '>' +
-    escapeHtml(profile.name) + ' · ' + escapeHtml(profile.model) + '</option>'
+    escapeHtml(profile.name) + ' · ' + escapeHtml(modelDisplayName(profile)) + '</option>'
   ).join('');
   return '<article class="agent-card" data-agent="' + escapeHtml(agent.id) + '">' +
     '<div class="agent-heading"><strong>' + icon('team') + ' 子 Agent</strong><button type="button" data-remove-agent="' + escapeHtml(agent.id) + '">移除</button></div>' +
@@ -2185,7 +2219,7 @@ function modalAgentCard(agent, index) {
   const options = '<option value=""' + (!agent.model_profile_id ? ' selected' : '') + '>跟随当前主模型</option>' + profiles.map((profile) =>
     '<option value="' + escapeHtml(profile.id) + '"' +
     (profile.id === agent.model_profile_id ? ' selected' : '') + '>' +
-    escapeHtml(profile.name) + ' · ' + escapeHtml(profile.model) + '</option>'
+    escapeHtml(profile.name) + ' · ' + escapeHtml(modelDisplayName(profile)) + '</option>'
   ).join('');
   return '<article class="modal-agent-card" data-modal-agent-index="' + index + '">' +
     '<div class="agent-heading"><strong>子 Agent #' + (index + 1) + '</strong><button type="button" data-modal-remove-agent="' + index + '">移除</button></div>' +
@@ -2407,7 +2441,7 @@ function renderWorkflowMindmap(currentTeam = team) {
       : '<span class="workflow-stage-badge status-ready">等待并行子任务汇合 · ' + completedCount + '/' + totalAgents + ' 完成</span>');
 
   const nodes = effectiveTeam.agents.map((agent, index) => {
-    const modelName = agent.model_profile_id ? (profiles.find((p) => p.id === agent.model_profile_id)?.model || '模型配置不可用') : ('跟随主模型 · ' + (profiles.find((p) => p.id === $('#chat-model-select').value)?.model || '默认'));
+    const modelName = agent.model_profile_id ? (modelDisplayName(profiles.find((p) => p.id === agent.model_profile_id)) || '模型配置不可用') : ('跟随主模型 · ' + (modelDisplayName(profiles.find((p) => p.id === $('#chat-model-select').value)) || '默认'));
     const owned = (agent.owned_paths || []).length ? '范围: ' + agent.owned_paths.join(', ') : '范围: 全局工作区';
     const st = statuses[index];
     const nodePct = st.state === 'completed' ? '100%' : (st.state === 'running' ? '50%' : '0%');
@@ -2839,6 +2873,61 @@ function scheduleExtensionRefresh() {
   })().finally(() => { extensionRefreshRunning = false; });
 }
 
+
+let conversationPluginEpoch=0;
+const conversationPluginMounts=new Map();
+let conversationPluginRefresh=Promise.resolve();
+function pluginSelectedModel(){
+  const profile=profiles.find(item=>item.id===$('#chat-model-select').value);
+  if(!profile)return null;
+  try{const wire=JSON.parse(profile.model);if(Array.isArray(wire)&&wire.length===2)return {provider:wire[0],model:wire[1]};}catch{}
+  return {provider:profile.provider||'micro-multi',model:profile.model};
+}
+async function importPluginClient(id,revision){
+  const url='/api/dsh/plugins/'+encodeURIComponent(id)+'/surface/client.js?revision='+encodeURIComponent(revision||'');
+  try{return await import(url);}catch(error){
+    // Diagnose a failed build without downloading every successful module twice.
+    const response=await fetch(url);
+    if(!response.ok){let detail;try{detail=(await response.json()).detail;}catch{}throw Error(detail||'插件客户端 HTTP '+response.status);}
+    await response.body?.cancel();
+    // Browsers retain failed module imports. A fresh URL permits recovery after
+    // transient transport or build failures, with only one retry per attempt.
+    return import(url+'&retry='+Date.now());
+  }
+}
+function refreshConversationPlugins(){
+  const epoch=++conversationPluginEpoch;
+  const work=conversationPluginRefresh.catch(()=>{}).then(()=>mountConversationPlugins(epoch));
+  conversationPluginRefresh=work;
+  return work;
+}
+async function mountConversationPlugins(epoch){
+  if(epoch!==conversationPluginEpoch)return;
+  const installed=dshPluginInventory?.installed||[];
+  const wanted=new Map(installed.filter(item=>item.enabled&&item.runtime==='native-cordis-host').map(item=>[item.id,item]));
+  for(const [id,entry] of conversationPluginMounts){
+    const item=wanted.get(id);
+    if(!item||entry.key!==conversationId+'|'+item.updated_at){await entry.dispose();entry.root.remove();entry.style.remove();conversationPluginMounts.delete(id);}
+  }
+  for(const [id,item] of wanted){
+    if(epoch!==conversationPluginEpoch)return;
+    if(conversationPluginMounts.has(id))continue;
+    let root,style,dispose;
+    try{
+      const surface=await api('/dsh/plugins/'+encodeURIComponent(id)+'/surface');
+      if(!surface.available||epoch!==conversationPluginEpoch)continue;
+      const client=await importPluginClient(id,surface.client_revision||item.updated_at);
+      if(epoch!==conversationPluginEpoch)return;
+      root=document.createElement('div');$('#plugin-runtime-roots').append(root);
+      style=document.createElement('link');style.rel='stylesheet';style.href='/api/dsh/plugins/'+encodeURIComponent(id)+'/surface/client.css?revision='+encodeURIComponent(surface.client_revision||item.updated_at||'');document.head.append(style);
+      const targets={'conversation.input.dock':$('#plugin-input-dock'),'conversation.input.overlay':$('#plugin-input-overlay'),'conversation.input.activity':$('#plugin-input-activity'),'conversation.input.plan':$('#plugin-input-plan'),'conversation.input.permission':$('#plugin-input-permission'),'conversation.session.header.actions':$('#plugin-header-actions'),'conversation.session.header.utilities':$('#plugin-header-actions'),'conversation.session.header.corner':$('#plugin-header-actions'),'conversation.input.model':$('#plugin-model-options'),'conversation.input.left':$('#plugin-composer-left'),'conversation.input.right':$('#plugin-composer-right'),'conversation.composer.dock':$('#plugin-composer-dock'),'shell.overlay':$('#plugin-overlay-root'),'shell.bottom':$('#plugin-shell-bottom'),'shell.leading':$('#plugin-shell-leading'),'conversation.header.actions':$('#plugin-header-actions')};
+      dispose=await client.mount(root,{rpcUrl:'/api/dsh/plugins/'+encodeURIComponent(id)+'/rpc',sessionId:conversationId,mode:'conversation',targets,modelOptions:surface.provides_models,model:pluginSelectedModel});
+      if(epoch!==conversationPluginEpoch){await dispose();root.remove();style.remove();return;}
+      conversationPluginMounts.set(id,{dispose,root,style,key:conversationId+'|'+item.updated_at});
+    }catch(error){await dispose?.();root?.remove();style?.remove();console.error('插件前端加载失败',item.name,error);}
+  }
+}
+
 async function loadPlugins() {
   try {
     const projectId = currentProjectId();
@@ -2858,6 +2947,7 @@ async function loadPlugins() {
       '">删除</button></div></div>'
     ).join('');
     window.maspPlugins = plugins;
+    void refreshConversationPlugins();
   } catch (error) { setFeedback('#plugin-feedback', error.message, true); }
 }
 
@@ -2868,6 +2958,8 @@ async function saveTeam() {
     await createConversation(projectId);
   }
   team = await api('/projects/' + encodeURIComponent(projectId) + '/team', 'PUT', collectTeam());
+  $('#chat-model-select').value=team.main_profile_id;refreshSelectMenu($('#chat-model-select'));
+  const conversation=conversations.find(item=>item.id===conversationId);if(conversation)conversation.model_profile_id=team.main_profile_id;
   renderTeam();
   setFeedback('#team-feedback', '团队配置已保存，可继续微调或点击确认开始执行。');
   return team;
@@ -3257,6 +3349,7 @@ async function startNewChat(initialProjectId = undefined) {
   await loadWorkspaceFiles('');
   await refreshContextUsage({ used_tokens: 0, max_tokens: contextMaxTokens, usage_percent: 0, message_count: 0 });
   syncTrackedSelectorLabels();
+  void refreshConversationPlugins();
   welcome();
 }
 
@@ -3280,6 +3373,7 @@ async function openConversation(id, options = {}) {
   updateNavigationButtons();
   feedbackRunId = null;
   conversationId = id;
+  void refreshConversationPlugins();
   localStorage.setItem('masp.lastConversationId', id);
   selectedRunId = null;
   currentActiveRun = null;
@@ -3337,6 +3431,7 @@ async function createConversation(projectId = draftProjectId) {
   });
   conversations.unshift(item);
   conversationId = item.id;
+  void refreshConversationPlugins();
   draftProjectId = boundProject;
   $('#project-select').value = boundProject || '';
   if (trailIndex < 0 || conversationTrail[trailIndex] !== item.id) {
@@ -3378,12 +3473,29 @@ if (thread) {
 }
 
 const streamingMarkdownTimers = new WeakMap();
+let workspaceRefreshTimer = null;
+function scheduleWorkspaceRefresh() {
+  if (workspaceRefreshTimer !== null) return;
+  workspaceRefreshTimer = setTimeout(() => {
+    workspaceRefreshTimer = null;
+    loadWorkspaceFiles(workspaceFolder).catch(() => {});
+    loadWorkspaceChanges().catch(() => {});
+  }, 300);
+}
+let streamScrollFrame = null;
+function scheduleThreadScroll() {
+  if (streamScrollFrame !== null) return;
+  streamScrollFrame = requestAnimationFrame(() => {
+    streamScrollFrame = null;
+    if (!userScrolledUpDuringStream) thread.scrollTop = thread.scrollHeight;
+  });
+}
 function scheduleStreamingMarkdown(element) {
   if (streamingMarkdownTimers.has(element)) return;
   const timer = setTimeout(() => {
     streamingMarkdownTimers.delete(element);
     if (element.isConnected) renderMarkdownElement(element, visibleAssistantContent(element.dataset.rawContent || ''));
-  }, 100);
+  }, Math.min(240, 50 + Math.floor((element.dataset.rawContent || '').length / 1000) * 10));
   streamingMarkdownTimers.set(element, timer);
 }
 
@@ -3431,6 +3543,7 @@ async function send(content, attachments = [], options = {}) {
     let allTurnToolEvents = [];
     let lastItemType = null;
     let abortBannerShown = false;
+    let internalPlanning = false;
 
     const response = await fetch('/api/conversations/' + encodeURIComponent(conversationId) + '/messages', {
       method: 'POST',
@@ -3447,6 +3560,7 @@ async function send(content, attachments = [], options = {}) {
         max_context_tokens: contextMaxTokens,
         auto_compact: contextAutoCompact,
         autonomous_hours: Number($('#dsh-autonomous-hours')?.value || 8),
+        review_team_plan: true,
         execute_team_now: Boolean(options.executeTeamNow),
         team_version: options.executeTeamNow ? team?.version : null,
         execute_plan_now: Boolean(options.executePlanNow),
@@ -3486,6 +3600,19 @@ async function send(content, attachments = [], options = {}) {
           .map((line) => line.slice(5).trim()).join('\n');
         if (!data) continue;
         const parsed = JSON.parse(data);
+        if (part.includes('event: planning')) {
+          internalPlanning = Boolean(parsed.internal);
+          if (internalPlanning) {
+            activeThinkingGroupEl = createOrUpdateThinkingGroup(activeThinkingGroupEl, {kind:'work',status:'running'});
+            if (!activeThinkingGroupEl.parentElement && turnContainer) turnContainer.insertBefore(activeThinkingGroupEl,currentBubble);
+          }
+          continue;
+        }
+        if (part.includes('event: work')) {
+          activeThinkingGroupEl = createOrUpdateThinkingGroup(activeThinkingGroupEl, parsed);
+          if (!activeThinkingGroupEl.parentElement && turnContainer) turnContainer.insertBefore(activeThinkingGroupEl,currentBubble);
+          continue;
+        }
         if (part.includes('event: execution_plan')) {
           activeExecutionPlanEl = renderExecutionPlanCard(parsed);
           if (activeExecutionPlanEl && turnContainer) {
@@ -3531,13 +3658,14 @@ async function send(content, attachments = [], options = {}) {
         if (part.includes('event: team')) {
           team = parsed;
           renderTeam();
-          if (parsed.status === 'draft' && parsed.pending_tasks?.length) {
+          if (parsed.status === 'draft' && parsed.agents?.length) {
             activePlanCardEl = createOrUpdatePlanApprovalCard(activePlanCardEl, parsed);
             if (activePlanCardEl && !activePlanCardEl.parentElement && turnContainer) turnContainer.insertBefore(activePlanCardEl, currentBubble);
           }
           continue;
         }
         if (part.includes('event: thinking')) {
+          if (internalPlanning) continue;
           activeThinkingGroupEl = createOrUpdateThinkingGroup(activeThinkingGroupEl, parsed);
           if (activeThinkingGroupEl && !activeThinkingGroupEl.parentElement && turnContainer) {
             turnContainer.insertBefore(activeThinkingGroupEl, turnContainer.firstChild);
@@ -3568,7 +3696,7 @@ async function send(content, attachments = [], options = {}) {
         }
         if (part.includes('event: run')) {
           selectedRunId = parsed.run_id;
-          await loadRuns();
+          loadRuns().catch(() => {});
           watchRun(parsed.run_id);
           continue;
         }
@@ -3612,6 +3740,7 @@ async function send(content, attachments = [], options = {}) {
           continue;
         }
         if (parsed.delta) {
+          if (internalPlanning) continue;
           if (lastItemType === 'tool' && currentBubbleText.trim().length > 0) {
             currentBubble.classList.remove('typing');
             currentBubble = document.createElement('div');
@@ -3659,14 +3788,11 @@ async function send(content, attachments = [], options = {}) {
           }
           lastItemType = 'tool';
           if ((parsed.status === 'complete' || parsed.status === 'completed') && (parsed.category === 'edit' || parsed.category === 'command')) {
-            loadWorkspaceFiles(workspaceFolder).catch(() => {});
-            loadWorkspaceChanges().catch(() => {});
+            scheduleWorkspaceRefresh();
           }
         }
       }
-      if (!userScrolledUpDuringStream) {
-        thread.scrollTop = thread.scrollHeight;
-      }
+      if (!userScrolledUpDuringStream) scheduleThreadScroll();
       if (done) break;
     }
     if (currentBubbleText) {
@@ -4311,7 +4437,7 @@ $('#add-agent').addEventListener('click', () => {
   $('#agent-list .empty')?.remove();
   $('#agent-list').insertAdjacentHTML('beforeend', agentCard({
     id: 'agent_' + count, name: '新 Agent', responsibility: '负责指定模块的实现与验证',
-    model_profile_id: $('#main-profile').value, owned_paths: [], locked: false,
+    model_profile_id: '', owned_paths: [], locked: false,
   }));
   teamDirty = true;
   setFeedback('#team-feedback', '已添加 Agent 草稿。请配置职责和模型，再保存团队。');
@@ -4618,14 +4744,23 @@ async function openInstalledDetail(id) {
       if (surface.available) {
         $('#extension-detail-dialog').classList.add('has-plugin-surface');
         $('#extension-detail-confirm').hidden = true;
-        fields.innerHTML = '<div class="plugin-surface-toolbar"><span>插件设置</span><button type="button" id="plugin-import-models">同步插件模型到对话</button></div><div id="plugin-client-root" class="plugin-client-root">正在加载插件页面…</div>';
+        fields.innerHTML = '<div class="plugin-surface-toolbar"><span>插件设置</span></div><div id="plugin-client-root" class="plugin-client-root">正在加载插件页面…</div>';
         const url = '/api/dsh/plugins/' + encodeURIComponent(id) + '/surface/';
-        const stylesheet = document.createElement('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = url + 'client.css'; document.head.append(stylesheet);
-        const client = await import(url + 'client.js?revision=' + encodeURIComponent(item.updated_at || ''));
+        const stylesheet = document.createElement('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = url + 'client.css?revision=' + encodeURIComponent(surface.client_revision||item.updated_at||''); document.head.append(stylesheet);
+        extensionSurfaceDispose = () => stylesheet.remove();
+        const client = await importPluginClient(id,surface.client_revision||item.updated_at);
         if (epoch !== extensionDetailEpoch) { stylesheet.remove(); return; }
-        const dispose = await client.mount($('#plugin-client-root'), {rpcUrl: '/api/dsh/plugins/' + encodeURIComponent(id) + '/rpc', sessionId: conversationId});
+        const dispose = await client.mount($('#plugin-client-root'), {rpcUrl: '/api/dsh/plugins/' + encodeURIComponent(id) + '/rpc', settingsNamespaces:surface.settings_namespaces, sessionId: conversationId, model: () => {
+          const profile = profiles.find(item => item.id === $('#chat-model-select').value);
+          if (!profile) return null;
+          try { const wire = JSON.parse(profile.model); if (Array.isArray(wire) && wire.length === 2) return {provider: wire[0], model: wire[1]}; } catch {}
+          return {provider: profile.provider || 'micro-multi', model: profile.model};
+        }});
+        if (epoch !== extensionDetailEpoch) { dispose(); stylesheet.remove(); return; }
         extensionSurfaceDispose = () => { dispose(); stylesheet.remove(); };
-        $('#plugin-import-models').addEventListener('click', async event => {
+        if (surface.provides_models) {
+        const importButton = document.createElement('button'); importButton.type = 'button'; importButton.textContent = '同步插件模型到对话'; fields.querySelector('.plugin-surface-toolbar').append(importButton);
+        importButton.addEventListener('click', async event => {
           event.currentTarget.disabled = true;
           try {
             const result = await api('/dsh/plugins/' + encodeURIComponent(id) + '/models/import', 'POST', {});
@@ -4634,12 +4769,17 @@ async function openInstalledDetail(id) {
           } catch (error) { $('#extension-detail-status').textContent = error.message; }
           finally { event.currentTarget.disabled = false; }
         });
+        }
         return;
       }
       const form = await api('/dsh/plugins/' + encodeURIComponent(id) + '/configuration');
       if (epoch !== extensionDetailEpoch) return;
       if (!form.editable || !form.entries.length) { fields.textContent = form.message || '此插件没有可调整参数。'; $('#extension-detail-confirm').hidden = true; return; }
       fields.innerHTML = form.entries.map((entry, index) => '<label class="extension-config-label">' + escapeHtml(entry.name) + '<textarea data-extension-config="' + index + '" rows="6" spellcheck="false">' + escapeHtml(JSON.stringify(entry.config, null, 2)) + '</textarea></label>').join('');
+      if(surface.provides_models){
+        const button=document.createElement('button');button.type='button';button.textContent='同步插件模型到对话';fields.prepend(button);
+        button.addEventListener('click',async()=>{button.disabled=true;try{const result=await api('/dsh/plugins/'+encodeURIComponent(id)+'/models/import','POST',{});profiles=await api('/model-profiles');renderSelectors();renderTeam();$('#extension-detail-status').textContent='已同步 '+result.models.length+' 个模型。';}catch(error){$('#extension-detail-status').textContent=error.message;}finally{button.disabled=false;}});
+      }
       save = () => api('/dsh/plugins/' + encodeURIComponent(id) + '/configuration', 'PUT', {revision: form.revision, entries: form.entries.map((entry, index) => ({key: entry.key, config: JSON.parse(fields.querySelector('[data-extension-config="' + index + '"]').value)}))});
     } else if (item.settings_key && item.config) {
       value = item.config;

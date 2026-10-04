@@ -33,6 +33,8 @@ from masp.cordis_runtime import NativeToolOutput, native_context_messages
 from masp.managed_commands import run_cancellable_tool
 from masp.model_runtime import (
     ModelRecovery,
+    compatible_model_stream,
+    complete_stream_result,
     configure_provider,
     evaluate_report,
     evidence_context,
@@ -367,6 +369,8 @@ class SupervisorManager:
         self.capacity = asyncio.Semaphore(max(1, max_concurrency))
         self.agent_locks: dict[str, asyncio.Lock] = {}
         self.background_tasks: dict[str, asyncio.Task[dict[str, Any]]] = {}
+        self.task_executions: dict[tuple[Any, ...], asyncio.Task[dict[str, Any]]] = {}
+        self.assigned_prompts: dict[str, str] = {}
         self.delegation_started = False
         self.require_team_approval = False
         self.coordinator = WorkspaceCoordinator(workspace_root)
@@ -439,8 +443,16 @@ class SupervisorManager:
             ):
                 raise ValueError("Each task needs a subagent_name and nonempty prompt")
             name = re.sub(r"[^a-zA-Z0-9_-]", "_", item["subagent_name"].strip().lower())
-            if not name or name in names or name in self.background_tasks:
-                raise ValueError("Duplicate or uncollected subagent: " + name)
+            if not name or name in names:
+                raise ValueError("Duplicate subagent: " + name)
+            if name in self.background_tasks and (
+                self.assigned_prompts.get(name) != item["prompt"].strip()
+                or (
+                    "owned_paths" in item
+                    and item["owned_paths"] != self.subagents[name].owned_paths
+                )
+            ):
+                raise ValueError("Collect the existing task before replacing subagent: " + name)
             if item.get("acceptance_criteria") is not None and (
                 not isinstance(item["acceptance_criteria"], list)
                 or not all(isinstance(c, str) for c in item["acceptance_criteria"])
@@ -449,7 +461,7 @@ class SupervisorManager:
             if any(key in item and not isinstance(item[key], str) for key in ("role", "model")):
                 raise ValueError("role and model must be strings")
             names.append(name)
-        if len(self.background_tasks) + len(tasks) > 64:
+        if len(set(self.background_tasks) | set(names)) > 64:
             raise ValueError("Collect existing reports before starting more than 64 tasks")
         dependencies = {
             name: item.get("depends_on") or [] for name, item in zip(names, tasks, strict=True)
@@ -488,9 +500,7 @@ class SupervisorManager:
         if self.require_team_approval:
             self.subagents.clear()
             for name, item in zip(names, tasks, strict=True):
-                self.create_subagent(
-                    name, item.get("role") or name, item["prompt"], model=item.get("model")
-                )
+                self.create_subagent(name, item.get("role") or name, item["prompt"], model=None)
                 self.subagents[name].owned_paths = list(item.get("owned_paths") or [])
             self.team_obj.update(status="draft", workflow_state="planned", pending_tasks=tasks)
             self._sync_team_obj()
@@ -571,13 +581,16 @@ class SupervisorManager:
 
         for name in order:
             item = tasks[names.index(name)]
+            if name in self.background_tasks:
+                continue
+            self.assigned_prompts[name] = item["prompt"].strip()
             self.delegation_started = True
             if name not in self.subagents:
                 self.create_subagent(
-                    name, item.get("role") or name, item["prompt"][:200], model=item.get("model")
+                    name, item.get("role") or name, item["prompt"][:200], model=None
                 )
             elif "model" in item or item.get("role"):
-                self.adjust_subagent(name, role=item.get("role"), model=item.get("model"))
+                self.adjust_subagent(name, role=item.get("role"), model=None)
             if "owned_paths" in item:
                 self.subagents[name].owned_paths = list(item["owned_paths"])
             if any(
@@ -637,6 +650,12 @@ class SupervisorManager:
         spec = self.subagents.get(clean_name)
         if not spec:
             return None
+        if model is not None and (model.strip() or None) != spec.model_profile_id:
+            # A human model change starts a new execution generation, even when
+            # switching back to a model used earlier in this turn.
+            for key, operation in list(self.task_executions.items()):
+                if key[0] == clean_name and operation.done():
+                    self.task_executions.pop(key, None)
         if role:
             spec.role = role.strip()
         if description:
@@ -661,22 +680,36 @@ class SupervisorManager:
             spec.role = ag.get("role") or ag.get("name") or spec.role
             spec.responsibility = ag.get("responsibility", spec.responsibility)
             spec.system_prompt = ag.get("system_prompt", spec.system_prompt)
-            spec.model_profile_id = ag.get("model_profile_id") or None
+            self.adjust_subagent(name, model=ag.get("model_profile_id") or "")
             spec.owned_paths = list(ag.get("owned_paths") or [])
         for name in list(self.subagents):
             if name not in members:
                 task = self.background_tasks.get(name)
                 if task and not task.done():
                     task.cancel()
+                self._cancel_assignments(name)
                 self.subagents[name].status = "cancelled"
                 del self.subagents[name]
         self._sync_team_obj()
 
+    def _cancel_assignments(self, name: str) -> list[asyncio.Task[dict[str, Any]]]:
+        operations = []
+        for key, operation in list(self.task_executions.items()):
+            if key[0] == name:
+                self.task_executions.pop(key, None)
+                if not operation.done():
+                    operation.cancel()
+                    operations.append(operation)
+        self.assigned_prompts.pop(name, None)
+        return operations
+
     async def remove_subagent(self, name: str) -> dict[str, Any]:
+        operations = self._cancel_assignments(name)
         task = self.background_tasks.pop(name, None)
         if task:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+        await asyncio.gather(*operations, return_exceptions=True)
         await self.coordinator.release_reservation(name)
         self.subagents.pop(name, None)
         self.histories.pop(name, None)
@@ -708,6 +741,59 @@ class SupervisorManager:
         }
 
     async def execute_subagent_task(
+        self,
+        subagent_name: str,
+        task_prompt: str,
+        acceptance_criteria: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """One execution per assignment per turn, shared by every dispatch tool."""
+        if self.require_team_approval:
+            return await self._dispatch_subagent_task(
+                subagent_name, task_prompt, acceptance_criteria, **kwargs
+            )
+        name = re.sub(r"[^a-zA-Z0-9_-]", "_", subagent_name.strip().lower()) or "subagent"
+        spec = self.subagents.get(name)
+        key = (
+            name,
+            task_prompt.strip(),
+            spec.model_profile_id if spec else None,
+            spec.system_prompt if spec else "",
+            tuple(spec.owned_paths) if spec else (),
+        )
+        existing = self.task_executions.get(key)
+        if (
+            existing is not None
+            and existing.done()
+            and (
+                existing.cancelled()
+                or existing.exception() is not None
+                or existing.result().get("status") != "completed"
+            )
+        ):
+            self.task_executions.pop(key, None)
+            existing = None
+        if existing is not None:
+            result = dict(await asyncio.shield(existing))
+            result["reused_execution"] = True
+            if acceptance_criteria:
+                result["requested_acceptance_criteria"] = acceptance_criteria
+                result["reuse_note"] = (
+                    "同一轮的同一任务已执行；复用真实报告，新增验收条件由主代理核查。"
+                )
+            return result
+        operation = asyncio.create_task(
+            self._dispatch_subagent_task(name, task_prompt, acceptance_criteria, **kwargs)
+        )
+        self.task_executions[key] = operation
+        try:
+            return await asyncio.shield(operation)
+        except asyncio.CancelledError:
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+            raise
+
+    async def _dispatch_subagent_task(
         self,
         subagent_name: str,
         task_prompt: str,
@@ -1067,7 +1153,8 @@ class SupervisorManager:
             try:
                 async with (
                     asyncio.timeout(response_deadline(sub_cfg)),
-                    client.stream(
+                    compatible_model_stream(
+                        client,
                         "POST",
                         sub_cfg.base_url + "/chat/completions",
                         headers=sub_headers,
@@ -1165,7 +1252,12 @@ class SupervisorManager:
                 logger.error("Error during subagent %s execution: %s", spec.name, ex)
                 interrupted = True
 
-            if not saw_done and finish_reason is None and not cancel_event.is_set():
+            if (
+                not saw_done
+                and finish_reason is None
+                and not cancel_event.is_set()
+                and not complete_stream_result(accumulated_content, accumulated_tool_calls)
+            ):
                 interrupted = True
             model_steps.append(
                 {
@@ -1324,6 +1416,7 @@ class SupervisorManager:
                     # Build tool event for UI visibility
                     tool_evt = {
                         "name": fn_name,
+                        "arguments": fn_args,
                         "short_name": fn_name,
                         "category": "edit"
                         if fn_name in {"edit_file", "write_file", "delete_file"}

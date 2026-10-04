@@ -1,4 +1,4 @@
-# Desktop build and release / 桌面构建与发布
+# Desktop build and release
 
 ## Packages
 
@@ -76,7 +76,6 @@ sudo apparmor_parser -r /etc/apparmor.d/micro-multi-appimage
 
 The same policy is provided in [`desktop/micro-multi-appimage.apparmor`](../desktop/micro-multi-appimage.apparmor). The paths cover default AppImage mounts and extract-and-run directories under `/tmp`; adapt them if using a different temporary directory. Debian installation configures its installed sandbox helper and namespace policy automatically.
 
-Ubuntu 24.04 及以上系统在首次使用 AppImage 前执行上述命令，加载应用专用策略。AppImage 保持 Chromium 沙箱启用，系统的全局用户命名空间限制继续生效。Deb 安装自动配置沙箱辅助程序与命名空间策略。
 
 ## Runtime layout
 
@@ -102,12 +101,4 @@ The smoke script starts the actual packaged executable with empty temporary data
 
 Run `python scripts/publication_audit.py` before committing. Publish installation packages and `SHA256SUMS.txt` as Release assets, not source files. The manual desktop workflow builds Windows and Linux packages without publishing.
 
-The official repository is [https://github.com/LKDenchin/Micro-Multi](https://github.com/LKDenchin/Micro-Multi). Publish tag `v0.1.0` with the three installation packages, `SHA256SUMS.txt`, and the bilingual [Release notes](RELEASE_NOTES.md). The package homepage, source repository and issue tracker point to this repository.
-
-## 中文
-
-Windows 使用 NSIS 安装程序；Linux 提供 `.deb` 和 AppImage 单文件。三种包均包含 Python 和 Node，Git、Docker 与外部插件工具另行安装。应用数据位于用户目录，卸载保留数据。
-
-Linux 必须使用目标系统的依赖进行构建，不能复用 Windows `node_modules`。脚本下载并校验固定版本的 Linux Python，再生成两个包。上面的命令涵盖构建、凭据库、无显示器验证及实际安装检查。
-
-发布前执行测试、安装版冒烟和数据检查；安装包作为 Release 附件上传。官方仓库为 [https://github.com/LKDenchin/Micro-Multi](https://github.com/LKDenchin/Micro-Multi)，版本使用 `v0.1.0` 标签与中英文 Release 说明。当前 Windows 安装包未签名。
+The official repository is [Micro-Multi](https://github.com/LKDenchin/Micro-Multi). Existing v0.1.0 assets remain the published baseline. This source update does not publish a tag or Release; see [current changes](CURRENT_CHANGES.md).

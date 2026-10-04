@@ -1,15 +1,17 @@
-# 经审核的团队协作
+# Reviewed team collaboration
 
-在对话输入区选择多 Agent 协作，并说明目标、约束和验收方式。主 Agent 先分析需求，读取必要资料，编写需求、设计和任务文档，再一次提交完整团队方案。准备阶段只允许分析和方案文档操作，子 Agent 不会启动。
+Select multi-agent collaboration in the composer and describe the outcome, constraints and acceptance criteria. The lead first analyses the request, reads relevant materials and writes requirement, design and task documents, then submits a complete team plan. Preparation permits analysis and planning documents; members do not start during this phase.
 
-对话中的协作卡片显示待审核方案。点击“调整团队”可以编辑职责、提示词、负责文件范围和模型；点击“确认执行”才启动当前版本的任务。每次新任务或问题反馈都会生成新版方案，旧轮的批准不会沿用。批准版本只消费一次，过期卡片不能执行。
+## Review and execute
 
-团队视图展示成员状态、任务和返回内容。工具记录展示文件操作、命令、扩展调用及审批结果。可以在运行中补充说明，或暂停、停止当前执行。
+The collaboration card shows the pending plan. Edit responsibilities, prompts, file ownership and models with Adjust team. Confirm execution starts only that plan version. A new task or feedback creates a new version; prior approval is not reused. Approval is consumed once and stale cards cannot launch work. Plan records live in `.masp/team-plans/`; conversation history retains the cards.
 
-主 Agent 可调用 `remove_subagent` 强制停止并清除失败成员，等待取消完成、释放文件预留后再尝试其他方案。审核记录保存在工作区 `.masp/team-plans/`，聊天历史保留方案卡片。
+Members initially follow the lead model. Explicit model choices made in the team editor are preserved in execution. Model-generated member creation or scheduling cannot silently replace these choices. Saving the team synchronizes the lead model and composer selection.
 
-模型在“模型”页面配置。不同成员可以使用不同的兼容模型接口。自定义页面统一管理插件、Skills 和 MCP；输入框“+”列出真实启用能力。原生工具插件可直接供主 Agent 和成员使用。
+## Follow, interrupt and recover
 
-插件市场采用独立的自定义页面，提供分类、搜索、介绍与安装确认，以及已安装插件的参数配置。程序不嵌入或启动 dsh WebUI；插件通过已有 Cordis Host、JSON 工具、MCP 和 Skill 调用链运行。仅依赖浏览器 Client 的插件不能标记为已加载，安装失败会展示原因。参数先由真实 Host 验证，再保存并重启受影响的插件实例。Micro-Multi 与外部 dsh 的安装目录独立，避免意外改写另一应用的配置。主 WebUI 默认地址为 `http://127.0.0.1:3080/`。
+The team view shows status, tasks and reports. Tool records show files, commands, extension calls and approvals. Add guidance during work, or pause/stop execution. The lead can use `remove_subagent` to cancel a failed member; cancellation completes and file reservations are released before another approach starts.
 
-完成后检查文件差异、验证结果和成员报告。后续对话可以继续调整目标，并保留工作区上下文。
+Repeated scheduling of the same member/task within a turn shares its existing execution or completed report. New tasks execute normally and failed work can be retried. Acceptance criteria remain for the lead to verify; a reused report is not evidence that a new check ran.
+
+Configure model endpoints in Models and plugins, Skills and MCP in Customization. The composer + menu lists enabled capabilities. Native plugin tools are available to the lead and members. Inspect diffs, verification and reports before accepting the outcome; continue in the same saved conversation. See [models and recovery](DURABLE_TURNS_AND_MODEL_RECOVERY.md) and [native plugins](NATIVE_CORDIS.md).

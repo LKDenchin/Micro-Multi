@@ -61,9 +61,24 @@ def load_config(store: Store, home: Path, profile_id: str | None) -> ModelConfig
         if not base or not model:
             raise ValueError("请先在模型面板配置模型 API")
         return ModelConfig(base, model, os.environ.get("MASP_MODEL_API_KEY", ""))
-    profile = store.get("model_profile", profile_id)
     try:
-        secret = keyring.get_password("masp-workspace", _account(home, profile_id)) or ""
+        profile = store.get("model_profile", profile_id)
+    except KeyError:
+        matches = [
+            item
+            for item in store.list("model_profile")
+            if profile_id in {item.get("name"), item.get("model"), item.get("display_model")}
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"模型配置不可用：{profile_id}，请在模型设置中选择有效配置") from None
+        profile = matches[0]
+        profile_id = profile["id"]
+    try:
+        secret = (
+            (keyring.get_password("masp-workspace", _account(home, profile_id)) or "")
+            if profile["has_api_key"]
+            else ""
+        )
     except KeyringError as error:
         raise ValueError(f"System credential store unavailable: {type(error).__name__}") from None
     if profile["has_api_key"] and not secret:

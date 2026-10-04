@@ -9,7 +9,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from masp.cordis_runtime import CordisWorker, close_native_hosts, composed_manifest, inspect_native
+from masp.cordis_runtime import close_native_hosts, inspect_native
+from masp.plugin_surface import surface_host
 from masp.storage import Store, now
 
 _lock = threading.RLock()
@@ -28,11 +29,10 @@ def bundle_configuration(
         if not manifest or not manifest.get("plugins"):
             return {"entries": [], "editable": False, "message": "此扩展没有 Host 参数。"}
         digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
-        worker = CordisWorker(home, composed_manifest(store), Path(manifest["root"]))
-        try:
-            current = worker.request("bundle-config", plugins=manifest["plugins"])["entries"]
-        finally:
-            worker.close()
+        worker = surface_host(store, home, plugin_id)
+        current = worker.request("bundle-config", plugins=manifest["plugins"], pluginId=plugin_id)[
+            "entries"
+        ]
         if entries is None:
             return {"entries": current, "editable": True, "revision": digest}
         if revision != digest:

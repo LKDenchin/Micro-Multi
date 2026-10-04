@@ -71,13 +71,21 @@ def prepare_linux() -> None:
         encoding="utf-8",
     )
     subprocess.run(
-        [str(executable), "-c", "import fastapi, uvicorn, keyring, mcp, httpx2, jsonschema"],
+        [
+            str(executable),
+            "-c",
+            "import fastapi, uvicorn, wsproto, keyring, mcp, httpx2, jsonschema",
+        ],
         check=True,
     )
     print(f"Prepared Linux Python runtime: {target}")
 
 
 def main() -> None:
+    node = shutil.which("node")
+    if not node:
+        raise SystemExit("Node.js is required to prepare the framework snapshot")
+    subprocess.run([node, str(ROOT / "src/masp/native/framework_guard.mjs")], cwd=ROOT, check=True)
     if sys.platform == "linux":
         prepare_linux()
         return
@@ -127,7 +135,7 @@ def main() -> None:
         [
             str(target / "python.exe"),
             "-c",
-            "import fastapi, uvicorn, keyring, mcp, httpx2, jsonschema",
+            "import fastapi, uvicorn, wsproto, keyring, mcp, httpx2, jsonschema",
         ],
         check=True,
     )

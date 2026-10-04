@@ -1,14 +1,18 @@
-# deepseek-harness（dsh）插件指南
+# Native dsh plugins
 
-Micro-Multi 兼容 dsh Cordis Host 插件体系，使用 `@deepseek-ai/cordis@4.0.4`、`@deepseek-ai/dsh-tools@0.2.0-rc.1` 和 `@deepseek-ai/dsh-system-prompt@0.2.0-rc.1`。插件通过 `Context.plugin()` 加载，工具通过 dsh `ToolRuntime.execute()` 校验和执行。插件工具同时供主 Agent 与子 Agent 使用。
+Micro-Multi runs published deepseek-harness plugins through the official Cordis Loader and ClientModuleSystem. Cordis 4.0.4 and the locked dsh 0.2.0-rc.1 runtime form the host SDK. Host tools are available to both the lead agent and team members. Micro-Multi mounts client contributions inside its own interface; it does not start a separate dsh WebUI.
 
-## 加载插件
+## Install and build
 
-在“设置 → 扩展”选择已构建的本地插件目录，或让 Agent 使用 `plugin_manager` 的 `install` 动作。仓库中的 [`examples/native-cordis`](../examples/native-cordis) 注册计数服务、工具和事件，可直接用于体验。对同一工作区重复调用可以观察状态累积；不同工作区使用独立实例。
+Open Customization, select a marketplace package, npm package, Git source or local directory, and review its source and requested access. The agent can also use `plugin_manager` to install an extension. Sources require a `package.json` and a supported host or client entry. Try [examples/native-cordis](../examples/native-cordis).
 
-插件包包含 `package.json`，声明 `@deepseek-ai/cordis` 或 `cordis` 依赖，并提供本地 `main` / `exports` 入口。先安装插件依赖并构建为 ESM/CJS JavaScript；Node 支持的可擦除 TypeScript 入口也可加载。
+Published JavaScript artifacts are loaded directly. A runtime activation error does not by itself trigger a rebuild. If artifacts need building, the reviewed build plan includes package-local development and optional dependencies before the build command, so tools such as Vite are available even when the surrounding npm environment omits development dependencies. Installing dependencies does not execute their lifecycle scripts; source builds remain subject to the application's existing approval flow.
 
-多个入口可通过包内配置声明：
+The generic resolver reads npm dependencies, peer/dev declarations and `dsh.client.inject` metadata. Missing declared libraries go into an application-owned dependency cache. Package metadata remains discoverable when `package.json` is hidden by exports. Framework packages use the host SDK version or a compatible published version no newer than the host. Ordinary plugin dependencies retain their package declarations.
+
+## Entries and service injection
+
+Single local entries can use `microMulti.cordis.entry` and `config`. Multiple entries can declare:
 
 ```json
 {
@@ -25,18 +29,26 @@ Micro-Multi 兼容 dsh Cordis Host 插件体系，使用 `@deepseek-ai/cordis@4.
 }
 ```
 
-单个入口使用 `microMulti.cordis.entry` 和 `config`。入口位于包目录内，依赖与构建产物随插件准备好。
+Entries stay inside the package root. ESM/CJS exports, configuration validation and native Loader entry IDs are preserved. Bundle entry options, isolation, interception, disabled state and expressions follow the native Loader lifecycle.
 
-## 宿主接口
+The host resolves required services recursively from the official dsh base composition and provider metadata. This includes `timer`, `sessionQuery`, `workspaceRegistry` and configured storage backends. Providers activate on demand; the host does not eagerly execute an entire plugin catalogue. Missing real providers and startup errors produce a concrete diagnostic and roll back failed activation.
 
-宿主提供 `tools`、`systemPrompt` 和 `microMulti` 服务。`microMulti.workspace` 是工作区路径，`microMulti.pluginRoot` 是插件源目录。插件可以注册自己的服务，并使用 Cordis 的函数、对象或类插件、配置校验、依赖注入、事件与 effect 清理机制。以这些宿主接口声明插件依赖。
+The application provides `tools`, `systemPrompt` and `microMulti`; `microMulti.workspace` and `microMulti.pluginRoot` expose the corresponding paths. Tools use the official dsh parameter validation and structured output. Register services, events and effects with native Cordis APIs. Disable, reinstall, removal and normal shutdown dispose resources.
 
-工具参数由 dsh 工具运行时校验，执行结果以结构化内容返回。正常禁用、重装、卸载和后端退出时调用 dispose。状态在包与工作区对应的进程内保留，重新启动后初始化。
+## Settings and client pages
 
-## 运行与权限
+A plugin's own settings contributions appear in its details page. A declared Config schema can generate an editable form when the plugin has no custom settings page. Forms use native settings remotes, support ordinary fields and JSON for complex values, and preserve secret-field behavior. Validation and complete lifecycle restart succeed before atomic persistence; failed changes restore the prior configuration.
 
-每个包和工作区使用独立 Node 进程，工具调用在实例内串行执行，不同实例可以并行。启动和调用有硬超时，超时后终止实例；下一次明确调用创建新宿主。插件日志按工作区保存并限制大小。
+Legacy namespace settings use the original published SettingsProvider, supporting `get`, `register`, watch/update/mutate and revision conflicts alongside the current Config forms. Previous saved namespace values are migrated on read. See [runtime provenance](UPSTREAM_RUNTIME_PROVENANCE.md).
 
-插件以当前用户的系统权限运行。加载和调用遵循工作台的命令权限与操作审批；安装前检查插件来源与代码。桌面包使用内置 Electron Node，源码模式使用 Node.js 24+，也可通过 `MICRO_MULTI_NODE` 指定运行时。
+Client factories, synchronous and asynchronous requires, chunk registration and caches use ClientModuleSystem. Dependency and child-slot discovery uses JavaScript syntax analysis. Native parent components own their declared child slots. Settings slots and body portals are contained in plugin details; conversation and explicit shell contributions are mounted in their respective application regions. Native locale and renderer services provide the actual client interfaces.
 
-框架源码与接口说明见 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。
+Browser bundles disable Node-internal probes instead of relying on a browser `process` global. Client JS/CSS and host reuse incorporate runtime source and lock-file revisions, invalidating stale assets after upgrades. Persistent plugin subscriptions use WebSocket so they do not exhaust the browser HTTP connection pool. Native HTTP routes preserve streaming, binary bodies and response headers.
+
+## Runtime, permissions and diagnostics
+
+Package/workspace hosts are separate Node processes with bounded startup/call time and logs. A terminated host is recreated on a later explicit call. Data and dependency caches belong to Micro-Multi, independently of an external dsh installation. Source operation needs Node.js 24+; desktop packages supply Node. `MICRO_MULTI_NODE` can select another runtime.
+
+Plugins run with the current user's system permissions. Process separation and integrity-verified framework source snapshots protect host stability; they are not an OS sandbox for arbitrary plugin code. External CLIs, account login, provider credentials and network services still require their own setup. Do not treat successful installation as verification of every remote provider operation.
+
+See [extensions](extensions.md), [current changes](CURRENT_CHANGES.md) and [security](../SECURITY.md). Framework reference: [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness).

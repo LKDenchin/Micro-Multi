@@ -1,5 +1,7 @@
 # Desktop release validation — 2026-10-02
 
+This dated record covers the original release, not current source or newly rebuilt installers. See [current changes](CURRENT_CHANGES.md) for current checks.
+
 Validated locally on Windows 10 x64 with Python 3.14.7 and Ubuntu 24.04.5 x64 in a disposable VM with Python 3.14.8. Both desktop distributions use Electron 43.7.7. Checks use temporary data, synthetic credentials and offline fixtures.
 
 | Check | Result |
@@ -60,9 +62,3 @@ The [v0.1.0 Release](https://github.com/LKDenchin/Micro-Multi/releases/tag/v0.1.
 - `SHA256SUMS.txt` — SHA-256 digests for all three installation packages.
 
 Use the Release checksum file to verify downloads. The Windows installer is unsigned. Package metadata links to the official source repository and issue tracker.
-
-## 中文
-
-Windows、Linux deb 与 AppImage 三种包均已生成。Windows 和 deb 的实际安装、启动及卸载检查通过；最终 AppImage 使用单文件解压运行入口验证实际资源、界面和 dsh 运行时。三种包的 194 项必要 Node 依赖及 peer 依赖均完整，主进程与源码一致。252 项测试、静态检查、格式检查和类型检查通过。1 项 Windows 符号链接测试跳过。测试使用临时数据和合成凭据。
-
-用户数据及两个模型凭据条目已清除，首次启动为空白状态。当前安装包未签名。安装包与 SHA-256 校验清单通过 [v0.1.0 Release](https://github.com/LKDenchin/Micro-Multi/releases/tag/v0.1.0) 分发。软件包元信息链接到正式源码仓库和问题追踪页面。

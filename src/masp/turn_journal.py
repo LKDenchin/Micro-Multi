@@ -22,6 +22,7 @@ class TurnJournal:
         self.message_id = message_id
         self.logs = enabled_logs
         self.finished = False
+        self.internal_planning = False
         self.record: dict[str, Any] = {
             "id": message_id,
             "conversation_id": conversation_id,
@@ -63,6 +64,7 @@ class TurnJournal:
         await self._offload(self.close)
 
     def consume(self, frame: str) -> None:
+        changed = False
         for block in frame.split("\n\n"):
             lines = block.splitlines()
             payload = "\n".join(line[5:].strip() for line in lines if line.startswith("data:"))
@@ -70,13 +72,20 @@ class TurnJournal:
                 continue
             event = next((line[6:].strip() for line in lines if line.startswith("event:")), "")
             data = json.loads(payload)
+            if event == "planning":
+                self.internal_planning = bool(data.get("internal"))
+                continue
             if event == "complete":
                 self.finished = True
                 continue
             if data.get("delta"):
                 self.record["content"] += data["delta"]
                 # A single text frame in fallback checkpoints renders the complete partial answer.
+            elif event == "work":
+                self.record["thinking"] = data
             elif event == "thinking":
+                if self.internal_planning:
+                    continue
                 self.record["thinking"] = data
             elif event == "tool":
                 self.record["tool_events"].append(data)
@@ -88,18 +97,33 @@ class TurnJournal:
                 events.append(data)
             elif event == "team":
                 self.store.update("conversation", self.conversation_id, team=data)
+                if data.get("status") == "draft" and data.get("pending_tasks"):
+                    self.record["segments"] = [
+                        item for item in self.record["segments"] if item.get("type") != "team_plan"
+                    ]
+                    self.record["segments"].append({"type": "team_plan", "team": data})
             elif event == "error":
                 self.record["execution_error"] = data.get("detail")
             elif event == "aborted":
                 self.record["aborted"] = True
             else:
                 continue
-            self.save()
+            changed = True
+        if changed:
+            # The producer may have committed its final record while a display
+            # batch was collecting. That record includes the pending text and
+            # must retain its richer final metadata.
+            current = self.store.get("message", self.message_id)
+            if "termination_reason" not in current:
+                self.save()
 
     def close(self) -> None:
         current = self.store.get("message", self.message_id)
         status = "completed" if self.finished else "interrupted"
-        if current.get("termination_reason") or current.get("execution_error"):
+        if (
+            current.get("termination_reason")
+            and current["termination_reason"] != "awaiting_team_approval"
+        ) or current.get("execution_error"):
             status = "failed"
         if status == "interrupted":
             for agent in current.get("subagent_events", []):

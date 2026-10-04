@@ -5,8 +5,8 @@
   <meta name="theme-color" content="#0d0d0d"><title>Micro-Multi</title>
   <link rel="icon" type="image/svg+xml" href="/static/micro-multi.svg">
   <link rel="apple-touch-icon" href="/static/micro-multi.png">
-  <link rel="stylesheet" href="/static/chat.css?v=48">
-  <script type="module" src="/static/chat.js?v=48"></script>
+  <link rel="stylesheet" href="/static/chat.css?v=55">
+  <script type="module" src="/static/chat.js?v=55"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -25,7 +25,7 @@
     </aside>
     <div class="resize-handle" id="resize-sidebar" role="separator" aria-label="调整侧边栏宽度" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="420" tabindex="0" data-resize="sidebar"></div>
     <main class="chat-area">
-      <header class="chat-header"><div class="header-title"><button id="header-expand-sidebar" class="header-icon-btn" title="展开左侧栏" aria-label="展开左侧栏" hidden>◫</button><strong id="project-name">新聊天</strong><span id="header-project"></span></div><div class="header-actions"><button type="button" id="header-open-workflow" class="header-pill-btn" title="查看并操作多智能体实时协作导图">协作导图</button><button type="button" id="header-pause-chat" class="header-pill-btn" title="暂停或恢复多智能体执行" hidden>暂停对话</button><button type="button" id="header-open-changes" class="header-pill-btn" title="查看工作区代码改动">改动</button><button type="button" id="header-open-review" class="header-pill-btn" title="打开交互式 Git 审查">审查</button><button id="toggle-inspector" title="展开或收起右侧工作区" aria-label="切换右侧工作区"></button></div></header>
+      <header class="chat-header"><div class="header-title"><button id="header-expand-sidebar" class="header-icon-btn" title="展开左侧栏" aria-label="展开左侧栏" hidden>◫</button><strong id="project-name">新聊天</strong><span id="header-project"></span></div><div class="header-actions"><span id="plugin-header-actions" class="plugin-slot-host"></span><button type="button" id="header-open-workflow" class="header-pill-btn" title="查看并操作多智能体实时协作导图">协作导图</button><button type="button" id="header-pause-chat" class="header-pill-btn" title="暂停或恢复多智能体执行" hidden>暂停对话</button><button type="button" id="header-open-changes" class="header-pill-btn" title="查看工作区代码改动">改动</button><button type="button" id="header-open-review" class="header-pill-btn" title="打开交互式 Git 审查">审查</button><button id="toggle-inspector" title="展开或收起右侧工作区" aria-label="切换右侧工作区"></button></div></header>
       <div id="chat-turn-rail" class="chat-turn-rail" aria-label="多轮对话快速导航" hidden>
         <div id="chat-turn-rail-ticks" class="chat-turn-rail-ticks"></div>
         <div id="turn-rail-popover" class="turn-rail-popover" hidden></div>
@@ -355,7 +355,9 @@
             </div>
           </div>
         </div>
+        <div id="plugin-input-dock" class="plugin-slot-host"></div>
         <form id="composer">
+          <div id="plugin-input-overlay" class="plugin-slot-host"></div>
           <div id="composer-add-menu" class="composer-add-menu" hidden></div>
           <textarea id="prompt" rows="2" placeholder="随心输入"></textarea>
           <div id="attachment-list" aria-live="polite"></div>
@@ -382,6 +384,8 @@
               <label class="composer-select project-select-hidden"><select id="project-select" aria-label="项目"><option value="">通用对话</option></select></label>
             </div>
             <div class="composer-right">
+              <div id="plugin-input-activity" class="plugin-slot-host"></div><div id="plugin-input-plan" class="plugin-slot-host"></div><div id="plugin-input-permission" class="plugin-slot-host"></div>
+              <div id="plugin-model-options" class="plugin-slot-host"></div>
               <div id="plugin-composer-right" class="plugin-slot-host"></div>
               <label class="composer-select model-select"><select id="chat-model-select" aria-label="对话模型"><option value="">配置模型</option></select></label>
               <label class="composer-select agent-select" id="agent-select-wrap"><select id="agent-select" aria-label="对话模式"><option value="">多agent协作</option><option value="main_only">仅主agent</option></select></label>
@@ -563,6 +567,7 @@
     <main id="customization-content" class="customization-content"></main>
   </section>
   <div id="plugin-runtime-roots" hidden></div>
+  <div id="plugin-shell-leading" class="plugin-slot-host"></div><div id="plugin-shell-bottom" class="plugin-slot-host"></div>
   <div id="plugin-overlay-root" class="plugin-slot-host"></div>
   <dialog id="extension-detail-dialog" class="extension-detail-dialog">
     <header><h2 id="extension-detail-title"></h2><button id="extension-detail-close" type="button" aria-label="关闭插件详情">×</button></header>

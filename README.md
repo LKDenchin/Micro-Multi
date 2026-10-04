@@ -7,7 +7,7 @@
   <p><a href="https://github.com/LKDenchin/Micro-Multi/releases/latest"><img src="https://img.shields.io/github/v/release/LKDenchin/Micro-Multi" alt="Release" /></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0" /></a> <a href="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml"><img src="https://github.com/LKDenchin/Micro-Multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a> <img src="https://img.shields.io/badge/dsh-plugins%20compatible-4C8CFA" alt="dsh plugins compatible" /></p>
 </div>
 
-Micro-Multi brings conversations, code, tools, and a team of agents into one desktop workspace. Describe what you want to build: the lead agent can break down the work, bring in specialists, run tasks in parallel, review their results, and continue until the work is ready for you to inspect.
+Micro-Multi brings conversations, code, tools, and a team of agents into one desktop workspace. Describe what you want to build: the lead agent prepares a team plan for your review, then starts specialists after you confirm the plan, follows parallel tasks and reviews their results.
 
 Connect your own OpenAI-compatible model endpoint, choose models for different agents, and work with your local Git projects. You can follow what each agent is doing, inspect the files it changes, and keep the conversation for the next session.
 
@@ -24,6 +24,17 @@ Connect your own OpenAI-compatible model endpoint, choose models for different a
 | **Tools you can extend** | Add Skills, MCP servers, local command plugins, and Cordis Host packages. |
 | **Control when you need it** | Choose permissions, inspect requested operations, pause work, and stop a running turn. |
 | **A desktop that fits your workflow** | Paste attachments, pick project folders, and switch between English and Chinese, light and dark themes. |
+
+---
+
+## Current source update
+
+The 2026-10-05 source update keeps package version 0.1.0 and does not publish a new installer or Release. Existing downloads remain the published baseline; run or build current source to use these changes. See [current changes](docs/CURRENT_CHANGES.md) and [changelog](CHANGELOG.md).
+
+- Native Cordis Loader and ClientModuleSystem resolve declared service/client dependencies, missing libraries and package-local build tools through one generic loading path.
+- Plugin settings stay in details; schema-backed forms and the original namespace settings API validate, persist and recover configuration. Runtime source revisions invalidate old client/host caches.
+- Browser-safe bundles, WebSocket subscriptions and contained portals stabilize plugin loading and startup.
+- Team plans require confirmation of each version; chosen member models are preserved. Model parameter negotiation, failure diagnostics and durable stream batching improve conversation execution.
 
 ---
 
@@ -69,7 +80,7 @@ The desktop packages include Python and Node. Install Git for repository operati
 1. **Connect a model.** Open Models, enter your API endpoint, model ID, and key, then test the connection.
 2. **Open a project.** Create a project or import a local Git repository.
 3. **Describe the outcome.** Start a conversation with a task such as “Add pagination to this API and verify the behavior.”
-4. **Let the team work.** Choose multi-agent collaboration when the task benefits from specialists, or use the lead agent alone.
+4. **Review the team plan.** Choose multi-agent collaboration, adjust roles and models, and confirm the current plan before members start; you can also use the lead alone.
 5. **Review the result.** Inspect changed files, tool activity, reviews, and verification before using the work.
 
 You can adjust an agent's model or responsibility, add an attachment, and continue the conversation with feedback. Projects and conversations are kept locally across sessions.
@@ -80,7 +91,7 @@ You can adjust an agent's model or responsibility, add an attachment, and contin
 
 Use an endpoint compatible with OpenAI Chat Completions. Micro-Multi stores model-profile keys in the operating system credential store; no model credentials are included in the app.
 
-Skills give agents reusable instructions. Discover project Skills in `.agents/skills/`, or add user Skills through the workspace. MCP servers and plugins connect additional tools. Install trusted extensions from Settings and inspect the access they request.
+Skills give agents reusable instructions. Discover project Skills in `.agents/skills/`, or add user Skills through the workspace. MCP servers and plugins connect additional tools. Install trusted extensions through Customization and inspect the access they request.
 
 See [autonomous collaboration](docs/AUTONOMOUS_COLLABORATION.md) and the [extension guide](docs/NATIVE_CORDIS.md) for more details.
 
@@ -88,9 +99,9 @@ See [autonomous collaboration](docs/AUTONOMOUS_COLLABORATION.md) and the [extens
 
 ## deepseek-harness Plugin Ecosystem
 
-Micro-Multi uses the official dsh Cordis and tools runtimes. Load a built dsh Cordis Host package from Settings → Extensions: its tools become available to both the lead agent and specialist agents. Plugins can register services, inject dependencies, validate configuration and tool parameters, publish events, and release resources when disabled or removed.
+Micro-Multi uses the official dsh Cordis and tools runtimes. Install a dsh Cordis Host package through Customization: its tools become available to both the lead agent and specialist agents. Plugins can register services, inject dependencies, validate configuration and tool parameters, publish events, and release resources when disabled or removed.
 
-Each package keeps its own state within a workspace. The host provides `tools`, `systemPrompt`, and `microMulti` services; `microMulti.workspace` and `microMulti.pluginRoot` expose the workspace and package locations. Use these host services when developing plugins.
+Each package keeps its own state within a workspace. The host provides `tools`, `systemPrompt`, and `microMulti` services; `microMulti.workspace` and `microMulti.pluginRoot` expose the workspace and package locations. The host recursively resolves declared native services; client pages use the official module system. See the guide for dependency builds, settings, cache invalidation and diagnostics.
 
 Try the included [`examples/native-cordis`](examples/native-cordis) package, or follow the [dsh plugin guide](docs/NATIVE_CORDIS.md) to load your own package. See the [dsh repository](https://github.com/deepseek-ai/deepseek-harness) for the plugin framework.
 

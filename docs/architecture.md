@@ -5,3 +5,5 @@ The Electron main process starts the local Python service and opens the workspac
 Agent tools connect workspace files, commands, MCP services, Skills, and dsh plugins. Native dsh Cordis Host packages run in separate Node processes per package and workspace. The desktop distribution supplies Python and Electron's Node runtime.
 
 Application state lives in the user's writable data directory. API keys use the operating system credential store. Production packages include only application files, runtime dependencies, and license notices.
+
+Plugin providers are resolved on demand through native Loader metadata; browser contributions use the official client module system. See [native plugins](NATIVE_CORDIS.md) and [current changes](CURRENT_CHANGES.md).

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 CHECKPOINT_PREAMBLE = (
@@ -125,6 +125,7 @@ class RepeatToolReminder:
     threshold: int | None = None
     last_key: str = ""
     repeat_count: int = 0
+    history: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.threshold is not None:
@@ -148,6 +149,19 @@ class RepeatToolReminder:
             self.last_key = key
             self.repeat_count = 1
 
+        self.history.append(key)
+        del self.history[:-32]
+        # Detect A/B edits and longer recurring tool sequences across compaction.
+        for period in range(2, 5):
+            if len(self.history) >= period * 3:
+                pattern = self.history[-period:]
+                repetitions = 1
+                while (repetitions + 1) * period <= len(self.history) and self.history[
+                    -(repetitions + 1) * period : -repetitions * period
+                ] == pattern:
+                    repetitions += 1
+                if repetitions >= 3:
+                    self.repeat_count = max(self.repeat_count, repetitions)
         if self.repeat_count not in self.thresholds:
             return None
         first_threshold = self.thresholds[0] if self.thresholds else 3

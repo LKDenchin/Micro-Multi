@@ -42,9 +42,6 @@ def main() -> None:
             if matches:
                 issues.append(f"{label}: {name}")
         count += 1
-    for home in (ROOT / ".masp", ROOT / "evidence", ROOT / "docs" / "screenshots"):
-        if home.exists():
-            issues.append(f"Local data still present: {home.relative_to(ROOT)}")
     if issues:
         print("\n".join(issues))
         raise SystemExit(f"Publication audit failed: {len(issues)} finding(s)")

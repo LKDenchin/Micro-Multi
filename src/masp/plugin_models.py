@@ -6,19 +6,22 @@ import asyncio
 import hashlib
 import json
 import queue
+import re
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from masp.plugin_surface import surface_bundle, surface_host
+from masp.plugin_surface import finish_stream, surface_bundle, surface_host
 from masp.storage import Store, now
 
 
 def import_models(store: Store, home: Path, plugin_id: str, base_url: str) -> dict[str, Any]:
     bundle = surface_bundle(store, plugin_id)
-    catalog = surface_host(store, home, plugin_id).request("plugin-models", timeout=60)
+    catalog = surface_host(store, home, plugin_id).request(
+        "plugin-models", timeout=60, pluginId=plugin_id
+    )
     models = []
     base = base_url.rstrip("/") + "/api/dsh/plugins/" + quote(plugin_id, safe="") + "/models"
     for model in catalog["models"]:
@@ -31,10 +34,13 @@ def import_models(store: Store, home: Path, plugin_id: str, base_url: str) -> di
             "name": (model.get("name") or model["id"]) + " · " + model["provider"],
             "base_url": base,
             "model": wire_model,
+            "display_model": model.get("name") or model["id"],
             "has_api_key": False,
             "temperature": 0.2,
             "top_p": 1.0,
-            "max_output_tokens": min(32768, model.get("maxOutputTokens") or 8192),
+            "max_output_tokens": min(
+                32768, model.get("defaultMaxTokens") or model.get("maxOutputTokens") or 8192
+            ),
             "timeout_seconds": 300,
             "plugin_id": plugin_id,
             "provider": model["provider"],
@@ -65,6 +71,16 @@ def request_options(body: dict[str, Any]) -> dict[str, Any]:
             for block in raw:
                 if block.get("type") == "text":
                     content.append({"type": "text", "text": block["text"]})
+                elif block.get("type") == "image_url":
+                    url = (block.get("image_url") or {}).get("url", "")
+                    match = re.fullmatch(
+                        r"data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)", url
+                    )
+                    if not match or len(match[2]) > 14 * 1024 * 1024:
+                        raise ValueError("插件图片输入必须为不超过 10 MB 的内联图片")
+                    content.append(
+                        {"type": "micro-multi-image", "mediaType": match[1], "data": match[2]}
+                    )
                 else:
                     raise ValueError("此插件模型桥接尚不支持该附件类型")
         if role == "tool":
@@ -98,6 +114,7 @@ def request_options(body: dict[str, Any]) -> dict[str, Any]:
     return {
         "provider": provider,
         "model": model,
+        **({"sessionId": body["session_id"]} if body.get("session_id") else {}),
         "messages": messages,
         "tools": [tool["function"] for tool in body.get("tools", [])],
         "temperature": body.get("temperature", 0.2),
@@ -123,9 +140,17 @@ def openai_chunk(chunk: dict[str, Any], tool_indexes: dict[int, int]) -> dict[st
             {"index": index, "id": chunk["id"], "type": "function", "function": function}
         ]
     elif kind == "finish":
-        if chunk["reason"] in {"error", "aborted"}:
+        reason = chunk["reason"]
+        reason_kind = reason.get("kind") if isinstance(reason, dict) else reason
+        if reason_kind in {"error", "aborted"}:
             raise ValueError("插件模型请求失败或取消，请检查登录和插件配置")
-        finish = "tool_calls" if tool_indexes else "stop"
+        finish = (
+            "length"
+            if reason_kind in {"max-tokens", "length"}
+            else "tool_calls"
+            if reason_kind == "tool-calls" or tool_indexes
+            else "stop"
+        )
     elif kind == "usage":
         usage = chunk["usage"]
         return {
@@ -150,7 +175,9 @@ async def completion_stream(
     with worker.pending_lock:
         worker.stream_events[stream_id] = events
     work = asyncio.create_task(
-        asyncio.to_thread(worker.request, "plugin-model-stream", timeout=900, options=options, streamId=stream_id)
+        worker.request_async(
+            "plugin-model-stream", timeout=900, options=options, streamId=stream_id
+        )
     )
     tool_indexes: dict[int, int] = {}
     try:
@@ -169,11 +196,4 @@ async def completion_stream(
     except Exception as error:
         yield "data: " + json.dumps({"error": {"message": str(error)}}, ensure_ascii=False) + "\n\n"
     finally:
-        worker.control("cancel-call", id=stream_id)
-        with worker.pending_lock:
-            worker.stream_events.pop(stream_id, None)
-        try:
-            await asyncio.wait_for(asyncio.shield(work), 5)
-        except (TimeoutError, asyncio.CancelledError):
-            await asyncio.to_thread(worker.close, graceful=False)
-        await asyncio.gather(work, return_exceptions=True)
+        await finish_stream(worker, stream_id, work)

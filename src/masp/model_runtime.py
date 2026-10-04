@@ -6,7 +6,9 @@ import asyncio
 import json
 import re
 import time
+from collections import OrderedDict
 from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, cast
 from urllib.parse import urlparse
@@ -20,6 +22,131 @@ from masp._vendor.deerflow.tool_receipt import (
     receipt_id,
     render_tool_receipts_with_snapshot,
 )
+
+_parameter_capabilities: OrderedDict[tuple[str, str], dict[str, str | None]] = OrderedDict()
+_optional_parameters = {
+    "temperature",
+    "top_p",
+    "presence_penalty",
+    "frequency_penalty",
+    "stream_options",
+    "parallel_tool_calls",
+}
+
+
+@asynccontextmanager
+async def compatible_model_stream(
+    client: Any, method: str, url: str, **options: Any
+) -> AsyncIterator[Any]:
+    """Negotiate explicitly rejected optional parameters, independent of model names.
+
+    Only pre-generation 400/422 replies are retried. Tools, messages, model and
+    authentication remain mandatory; runtime failures retain normal recovery.
+    """
+    original = options.get("json") or {}
+    key = (url, str(original.get("model", "")))
+    adjustments = dict(_parameter_capabilities.get(key, {}))
+    for _attempt in range(4):
+        payload = dict(original)
+        for source, target in adjustments.items():
+            if source in payload:
+                value = payload.pop(source)
+                if target is not None:
+                    payload[target] = value
+        async with client.stream(method, url, **{**options, "json": payload}) as response:
+            if getattr(response, "status_code", 200) not in {400, 422}:
+                yield response
+                return
+            raw = await response.aread()
+            try:
+                body = json.loads(raw)
+                error = body.get("error") or body
+                if not isinstance(error, dict):
+                    raise ValueError("No structured parameter error")
+                message = str(error.get("message", "")).lower()
+                code = str(error.get("code", "")).lower()
+                parameter = error.get("param") or error.get("parameter")
+                if not isinstance(parameter, str):
+                    parameter = None
+            except (ValueError, AttributeError, TypeError):
+                yield response
+                return
+            rejected = "unsupported" in code or bool(
+                re.search(
+                    r"not supported|unsupported|unknown parameter|unrecognized parameter|extra inputs are not permitted",
+                    message,
+                )
+            )
+            if not rejected:
+                yield response
+                return
+            if parameter not in payload:
+                candidates = [
+                    field
+                    for field in payload
+                    if field in _optional_parameters | {"max_tokens", "max_completion_tokens"}
+                    if re.search(r"\b" + re.escape(field.lower()) + r"\b", message)
+                ]
+                parameter = candidates[0] if len(candidates) == 1 else None
+            target = None
+            if parameter in {"max_tokens", "max_completion_tokens"}:
+                replacement = "max_completion_tokens" if parameter == "max_tokens" else "max_tokens"
+                if re.search(r"\b" + replacement + r"\b", message):
+                    target = replacement
+                else:
+                    yield response
+                    return
+            elif parameter not in _optional_parameters:
+                yield response
+                return
+            if parameter in adjustments or _attempt == 3:
+                yield response
+                return
+            adjustments[parameter] = target
+            _parameter_capabilities[key] = dict(adjustments)
+            _parameter_capabilities.move_to_end(key)
+            while len(_parameter_capabilities) > 128:
+                _parameter_capabilities.popitem(last=False)
+
+
+async def compatible_model_post(client: Any, url: str, **options: Any) -> Any:
+    """Use the same negotiation for detection, planning and checkpoint requests."""
+
+    class PostTransport:
+        @asynccontextmanager
+        async def stream(self, method: str, target: str, **kwargs: Any) -> AsyncIterator[Any]:
+            yield await client.post(target, **kwargs)
+
+    async with compatible_model_stream(PostTransport(), "POST", url, **options) as response:
+        return response
+
+
+def model_text(value: Any) -> str:
+    """Accept either plain text or provider-neutral text content blocks."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "".join(model_text(part) for part in value)
+    if isinstance(value, dict):
+        text = value.get("text", value.get("content", ""))
+        if isinstance(text, dict):
+            text = text.get("value", "")
+        return model_text(text)
+    return ""
+
+
+def normalize_model_choice(choice: dict[str, Any]) -> None:
+    delta = choice.get("delta") or choice.get("message") or {}
+    choice["delta"] = delta
+    for key in ("content", "reasoning_content", "reasoning"):
+        if key in delta and delta[key] is not None:
+            delta[key] = model_text(delta[key])
+    if delta.get("reasoning") and not delta.get("reasoning_content"):
+        delta["reasoning_content"] = delta["reasoning"]
+    for call in delta.get("tool_calls") or []:
+        function = call.get("function") or {}
+        if isinstance(function.get("arguments"), (dict, list)):
+            function["arguments"] = json.dumps(function["arguments"], ensure_ascii=False)
 
 
 class VisibleOutputFilter:
@@ -127,6 +254,8 @@ async def model_stream_lines(
     last_activity = time.monotonic()
     last_heartbeat = last_activity
     pending: asyncio.Task[Any] | None = None
+    json_lines: list[str] = []
+    saw_sse = False
     try:
         while True:
             remaining = idle_seconds - (time.monotonic() - last_activity)
@@ -147,12 +276,26 @@ async def model_stream_lines(
             finally:
                 pending = None
             if line.startswith("data:"):
+                saw_sse = True
                 raw = line[5:].strip()
                 if raw == "[DONE]":
                     last_activity = time.monotonic()
                 else:
                     try:
-                        choices = json.loads(raw).get("choices") or []
+                        packet = json.loads(raw)
+                        if packet.get("error"):
+                            detail = packet["error"]
+                            raise RuntimeError(
+                                str(
+                                    detail.get("message", detail)
+                                    if isinstance(detail, dict)
+                                    else detail
+                                )
+                            )
+                        choices = packet.get("choices") or []
+                        for choice in choices:
+                            normalize_model_choice(choice)
+                        line = "data: " + json.dumps(packet, ensure_ascii=False)
                         if any(
                             c.get("finish_reason")
                             or any(
@@ -164,7 +307,22 @@ async def model_stream_lines(
                             last_activity = time.monotonic()
                     except (ValueError, AttributeError, TypeError):
                         pass
+            elif (
+                not saw_sse
+                and line.strip()
+                and not line.startswith(("event:", ":", "id:", "retry:"))
+            ):
+                json_lines.append(line)
             yield line
+        if json_lines and not saw_sse:
+            packet = json.loads("\n".join(json_lines))
+            if packet.get("error"):
+                raise RuntimeError(str(packet["error"]))
+            for choice in packet.get("choices") or []:
+                normalize_model_choice(choice)
+                choice.setdefault("finish_reason", "stop")
+            yield "data: " + json.dumps(packet, ensure_ascii=False)
+            yield "data: [DONE]"
     finally:
         if pending is not None:
             pending.cancel()
@@ -172,6 +330,23 @@ async def model_stream_lines(
         close = getattr(iterator, "aclose", None)
         if close:
             await close()
+
+
+def complete_stream_result(content: str, calls: Any) -> bool:
+    """A clean HTTP EOF is sufficient only for text or fully assembled tool calls."""
+    if calls:
+        for call in calls.values() if isinstance(calls, dict) else calls:
+            function = call.get("function", call)
+            if not function.get("name"):
+                return False
+            try:
+                arguments = json.loads(function.get("arguments") or "{}")
+            except (ValueError, TypeError):
+                return False
+            if not isinstance(arguments, dict):
+                return False
+        return True
+    return bool(content.strip())
 
 
 def preserve_partial_response(

@@ -83,3 +83,53 @@ def test_failed_build_is_not_replayed(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="consumed"):
         approve_build(store, home, pending["id"], pending["revision"], True)
     assert (root / "executed.txt").read_text() == "once\n"
+
+
+def test_published_package_build_installs_local_dev_tools_in_production_environment(
+    tmp_path, monkeypatch
+):
+    home = tmp_path / "home"
+    store = Store(home / "store.sqlite3")
+    root, stage = source(home)
+    tool = stage / "build-tool"
+    tool.mkdir()
+    (tool / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "fixture-build-tool",
+                "version": "1.0.0",
+                "bin": {"fixture-build-tool": "cli.cjs"},
+            }
+        )
+    )
+    (tool / "cli.cjs").write_text("#!/usr/bin/env node\n" + (root / "build.cjs").read_text())
+    package = json.loads((root / "package.json").read_text())
+    package["dependencies"] = {}
+    package["microMulti"] = {"cordis": {"entry": "built.mjs"}}
+    package["devDependencies"] = {"fixture-build-tool": "file:" + tool.as_posix()}
+    package["scripts"]["build"] = "fixture-build-tool"
+    (root / "package.json").write_text(json.dumps(package))
+    monkeypatch.setenv("NODE_ENV", "production")
+    monkeypatch.setenv("npm_config_omit", "dev")
+    monkeypatch.setenv("npm_config_production", "true")
+    monkeypatch.setattr("masp.plugin_tools.acquire_bundle", lambda *args: (root, stage))
+    pending = install_dsh_plugin_from_path(store, home, "npm:fixture")
+    assert pending["commands"][0]["argv"][1] == "install"
+    assert not (root / "node_modules").exists()
+    try:
+        installed = approve_build(store, home, pending["id"], pending["revision"], True)
+        assert installed["runtime"] == "native-cordis-host"
+        assert (root / "executed.txt").read_text() == "once\n"
+    finally:
+        close_native_hosts(store)
+
+
+def test_runtime_failure_in_published_artifacts_does_not_request_rebuild(tmp_path):
+    from masp.extension_builds import prepare_build
+
+    home = tmp_path / "home"
+    root, stage = source(home)
+    (root / "built.mjs").write_text("export function apply(){throw Error('runtime failure')}")
+    store = Store(home / "store.sqlite3")
+    assert prepare_build(store, home, root, stage, "npm:fixture", "runtime failure") is None
+    assert not store.list("extension_build")

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import atexit
 import asyncio
+import atexit
 import hashlib
 import json
 import os
@@ -12,15 +12,18 @@ import shutil
 import subprocess
 import threading
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
+
+import anyio
 
 from masp.cordis_runtime import CordisWorker, composed_manifest
 from masp.native_process import native_creation_flags
 from masp.storage import Store
 
 _lock = threading.RLock()
+_build_lock = threading.RLock()
 _hosts: dict[tuple[str, str], CordisWorker] = {}
 NATIVE = Path(__file__).parent / "native"
 
@@ -34,15 +37,35 @@ def surface_bundle(store: Store, plugin_id: str) -> dict[str, Any]:
     return bundle
 
 
-def surface_info(store: Store, plugin_id: str) -> dict[str, Any]:
+def runtime_revision() -> str:
+    digest = hashlib.sha256()
+    for file in sorted(NATIVE.rglob("*.mjs")):
+        digest.update(str(file.relative_to(NATIVE)).encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()[:24]
+
+
+def surface_info(store: Store, plugin_id: str, home: Path | None = None) -> dict[str, Any]:
     bundle = surface_bundle(store, plugin_id)
     client = bundle["native_manifest"].get("client")
-    return {"available": bool(client), "client": client, "name": bundle["name"]}
+    capabilities = (
+        surface_host(store, home, plugin_id).request("plugin-capabilities", pluginId=plugin_id)
+        if home
+        else {}
+    )
+    return {
+        "available": bool(client),
+        "client": client,
+        "client_revision": client_revision(Path(bundle["native_manifest"]["root"])),
+        "name": bundle["name"],
+        "provides_models": bool(capabilities.get("providesModels")),
+        "settings_namespaces": capabilities.get("settingsNamespaces", []),
+    }
 
 
 def surface_host(store: Store, home: Path, plugin_id: str) -> CordisWorker:
     surface_bundle(store, plugin_id)
-    manifest = composed_manifest(store)
+    manifest = {**composed_manifest(store), "_runtimeRevision": runtime_revision()}
     signature = json.dumps(manifest, sort_keys=True)
     key = (str(store.path.resolve()), "*")
     with _lock:
@@ -74,15 +97,14 @@ atexit.register(close_surfaces)
 
 async def rpc_stream(
     store: Store, home: Path, plugin_id: str, body: dict[str, Any]
-) -> AsyncIterator[str]:
+) -> AsyncGenerator[str, None]:
     worker = await asyncio.to_thread(surface_host, store, home, plugin_id)
     stream_id = uuid.uuid4().hex
     events: queue.Queue[dict[str, Any]] = queue.Queue()
     with worker.pending_lock:
         worker.stream_events[stream_id] = events
     work = asyncio.create_task(
-        asyncio.to_thread(
-            worker.request,
+        worker.request_async(
             "plugin-rpc-stream",
             timeout=86400,
             streamId=stream_id,
@@ -103,14 +125,49 @@ async def rpc_stream(
     except Exception as error:
         yield json.dumps({"error": {"message": str(error)}}, ensure_ascii=False) + "\n"
     finally:
-        worker.control("cancel-call", id=stream_id)
+        await finish_stream(worker, stream_id, work)
+
+
+async def finish_stream(worker: CordisWorker, stream_id: str, work: asyncio.Task[Any]) -> None:
+    # Starlette cancels a disconnecting response inside an AnyIO scope. Cleanup
+    # must survive that cancellation before deciding the shared Host is stuck.
+    with anyio.CancelScope(shield=True):
+        try:
+            worker.control("cancel-call", id=stream_id)
+        except (OSError, ValueError):
+            pass
         with worker.pending_lock:
             worker.stream_events.pop(stream_id, None)
         try:
             await asyncio.wait_for(asyncio.shield(work), 5)
-        except (TimeoutError, asyncio.CancelledError):
-            await asyncio.to_thread(worker.close, graceful=False)
+        except TimeoutError:
+            # A page subscription has no authority to stop every installed
+            # plugin. Release this waiter; the native abort remains in force.
+            work.cancel()
+        except (asyncio.CancelledError, ValueError, RuntimeError):
+            pass
         await asyncio.gather(work, return_exceptions=True)
+
+
+def client_revision(root: Path) -> str:
+    package = root / "package.json"
+    # Include installed client sources and adapter changes in the cache generation.
+    digest = hashlib.sha256(package.read_bytes())
+    for directory, folders, filenames in os.walk(root):
+        folders[:] = sorted(
+            name
+            for name in folders
+            if name not in {"node_modules", ".git"} and not (Path(directory) / name).is_symlink()
+        )
+        for name in sorted(filenames):
+            file = Path(directory) / name
+            stat = file.stat()
+            digest.update(f"{file.relative_to(root)}:{stat.st_mtime_ns}:{stat.st_size}".encode())
+    digest.update(runtime_revision().encode())
+    dependency_lock = NATIVE.parents[2] / "package-lock.json"
+    if dependency_lock.is_file():
+        digest.update(dependency_lock.read_bytes())
+    return digest.hexdigest()[:24]
 
 
 def client_asset(store: Store, home: Path, plugin_id: str, asset: str) -> Path:
@@ -121,17 +178,8 @@ def client_asset(store: Store, home: Path, plugin_id: str, asset: str) -> Path:
     if not manifest.get("client"):
         raise ValueError("此插件没有浏览器界面")
     root = Path(manifest["root"]).resolve()
-    package = root / "package.json"
-    # Include installed client sources and adapter changes in the cache generation.
-    digest = hashlib.sha256(package.read_bytes())
-    for file in sorted(root.rglob("*")):
-        if "node_modules" not in file.relative_to(root).parts and file.is_file():
-            stat = file.stat()
-            digest.update(f"{file.relative_to(root)}:{stat.st_mtime_ns}:{stat.st_size}".encode())
-    digest.update((NATIVE / "plugin_client.mjs").read_bytes())
-    digest.update((NATIVE / "build_plugin_client.mjs").read_bytes())
-    output = home / "plugin-client-cache" / digest.hexdigest()[:24]
-    with _lock:
+    output = home / "plugin-client-cache" / client_revision(root)
+    with _build_lock:
         if not (output / "client.js").is_file():
             node = os.environ.get("MICRO_MULTI_NODE") or shutil.which("node")
             if not node:
@@ -143,7 +191,7 @@ def client_asset(store: Store, home: Path, plugin_id: str, asset: str) -> Path:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=60,
+                timeout=240,
                 env=env,
                 creationflags=native_creation_flags(),
             )

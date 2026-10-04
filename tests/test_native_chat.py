@@ -205,12 +205,14 @@ def test_native_children_run_concurrently_with_lead(tmp_path):
                 execute,
                 asyncio.Event(),
                 asyncio.Event(),
-                max_steps=20,
+                max_steps=3,
                 max_concurrency=2,
                 remaining=lambda: 20,
             )
         ]
         assert entered == {"alpha", "beta"}
+        runtime = next(data for kind, data in events if kind == "native-runtime")
+        assert runtime.get("stopReason") == "completed"
         assert (
             sum(
                 kind == "subagent_progress" and data["status"] == "completed"

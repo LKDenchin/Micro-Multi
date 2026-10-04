@@ -551,10 +551,10 @@ def test_native_parallel_safe_calls_overlap_and_exclusive_barriers_hold(tmp_path
     )
     text = re.sub(
         r"async execute\(args\)\{return .*?;\}",
-        "async execute(args){const start=Date.now();await new Promise(resolve=>setTimeout(resolve,250));return {value:start,event:Date.now(),label:args.label,workspace:ctx.microMulti.workspace};}",
+        "async execute(args){const start=Date.now();fs.writeFileSync(ctx.microMulti.workspace+'/'+args.label+'.started','');await new Promise(resolve=>setTimeout(resolve,250));return {value:start,event:Date.now(),label:args.label,workspace:ctx.microMulti.workspace};}",
         text,
     )
-    tool.write_text(text)
+    tool.write_text("import fs from 'node:fs';\n" + text)
     home = tmp_path / "home"
     store = Store(home / "store.sqlite3")
     install_dsh_plugin_from_path(store, home, str(source))
@@ -571,9 +571,15 @@ def test_native_parallel_safe_calls_overlap_and_exclusive_barriers_hold(tmp_path
         first = pool.submit(call, "before")
         import time
 
-        time.sleep(0.04)
+        deadline = time.monotonic() + 10
+        while not (source / "before.started").exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert (source / "before.started").exists()
         exclusive = pool.submit(call, "exclusive")
-        time.sleep(0.04)
+        deadline = time.monotonic() + 10
+        while not (source / "exclusive.started").exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert (source / "exclusive.started").exists()
         after = pool.submit(call, "after")
         early, middle, late = first.result(), exclusive.result(), after.result()
     assert middle["value"] >= early["event"] and late["value"] >= middle["event"]

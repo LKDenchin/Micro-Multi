@@ -610,7 +610,7 @@ const templates = [
 ];
 const originals = new WeakMap();
 const attributeOriginals = new WeakMap();
-const excluded = '.bubble, .masp-markdown, .conversation, .project-link span, #project-name, .attachment-chip, .tool-step-detail, .markdown-body, .thinking-activity-body, .subagent-thinking-content, .subagent-error-detail, pre, code, textarea, .project-name, .conversation-name, .subagent-step-left strong';
+const excluded = '.plugin-client-root, .plugin-slot-host, .plugin-body-portals, .bubble, .masp-markdown, .conversation, .project-link span, #project-name, .attachment-chip, .tool-step-detail, .markdown-body, .thinking-activity-body, .subagent-thinking-content, .subagent-error-detail, pre, code, textarea, .project-name, .conversation-name, .subagent-step-left strong';
 function textValue(value) {
   const trimmed = value.trim();
   let translated = translations[trimmed];
@@ -638,7 +638,7 @@ function translate(root) {
   }
   const elements = root.nodeType === Node.ELEMENT_NODE ? [root, ...root.querySelectorAll('*')] : [];
   for (const el of elements) for (const attr of ['title', 'aria-label', 'placeholder']) {
-    if (el.matches('.conversation, .project-link, #project-name')) continue;
+    if (el.closest(excluded) || el.matches('.conversation, .project-link, #project-name')) continue;
     const value = el.getAttribute(attr);
     if (!value) continue;
     const saved = attributeOriginals.get(el) || {};

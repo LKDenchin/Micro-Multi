@@ -5,8 +5,10 @@ import json
 import os
 import re
 import shutil
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,17 @@ from masp.mcp_server import (
     execute_builtin_mcp_tool,
 )
 from masp.storage import Store, now
+
+_discovery_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+
+def _discovery_key(server: dict[str, Any], cwd: Path) -> str:
+    operational = {
+        key: value
+        for key, value in server.items()
+        if key not in {"connection_status", "last_error", "last_probe_at", "updated_at"}
+    }
+    return str(cwd.resolve()) + json.dumps(operational, sort_keys=True)
 
 
 def _resolve_command(command: str) -> str:
@@ -267,6 +280,10 @@ async def discover_tools(
 
     async def probe(server: dict[str, Any]) -> list[dict[str, Any]]:
         async with capacity:
+            cache_key = _discovery_key(server, cwd)
+            cached = _discovery_cache.get(cache_key)
+            if cached and time.monotonic() - cached[0] < 30:
+                return deepcopy(cached[1])
             try:
                 result = await probe_server(server, cwd)
             except Exception as error:
@@ -280,6 +297,10 @@ async def discover_tools(
                         last_probe_at=now(),
                     )
                 return []
+            if len(_discovery_cache) >= 128:
+                oldest = min(_discovery_cache, key=lambda key: _discovery_cache[key][0])
+                _discovery_cache.pop(oldest, None)
+            _discovery_cache[cache_key] = (time.monotonic(), deepcopy(result))
             if server.get("id") in stored_ids:
                 await asyncio.to_thread(
                     store.update,

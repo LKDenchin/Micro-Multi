@@ -7,6 +7,60 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 
+async def coalesce_text_frames(
+    source: AsyncIterator[str], interval: float = 0.016
+) -> AsyncIterator[str]:
+    """Batch text for one display frame, preserving every semantic event boundary."""
+    pending: asyncio.Future[str] | None = None
+    batch: list[str] = []
+    size = 0
+    deadline = 0.0
+    try:
+        while True:
+            if pending is None:
+                pending = asyncio.ensure_future(anext(source))
+            if batch:
+                ready, _ = await asyncio.wait(
+                    {pending}, timeout=max(0, deadline - time.monotonic())
+                )
+                if not ready:
+                    yield "".join(batch)
+                    batch.clear()
+                    size = 0
+                    continue
+            try:
+                frame = await pending
+            except StopAsyncIteration:
+                if batch:
+                    yield "".join(batch)
+                return
+            # Nested provider timeouts may consume cancellation while finishing
+            # their cleanup. Keep the owning turn's deadline authoritative.
+            owner = asyncio.current_task()
+            if owner is not None and owner.cancelling():
+                raise asyncio.CancelledError
+            pending = None
+            if frame.startswith('data: {"delta":'):
+                if not batch:
+                    deadline = time.monotonic() + interval
+                batch.append(frame)
+                size += len(frame)
+                if size >= 32768 or time.monotonic() >= deadline:
+                    yield "".join(batch)
+                    batch.clear()
+                    size = 0
+            else:
+                if batch:
+                    yield "".join(batch)
+                    batch.clear()
+                    size = 0
+                yield frame
+    finally:
+        if pending is not None:
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
+
 @dataclass
 class LiveTurn:
     message_id: str
@@ -32,10 +86,14 @@ class LiveTurn:
             if self.frames and after < self.frames[0][0] - 1:
                 yield 'event: replay_reset\ndata: {"resync":true}\n\n'
                 after = self.frames[0][0] - 1
-            for sequence, frame in list(self.frames):
-                if sequence > after:
-                    after = sequence
-                    yield f"id: {sequence}\n" + frame
+            pending = []
+            for sequence, frame in reversed(self.frames):
+                if sequence <= after:
+                    break
+                pending.append((sequence, frame))
+            for sequence, frame in reversed(pending):
+                after = sequence
+                yield f"id: {sequence}\n" + frame
             if self.finished_at is not None:
                 return
             try:

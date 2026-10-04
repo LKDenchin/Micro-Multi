@@ -10,10 +10,13 @@ files:
   - '!src/**/__pycache__/**'
   - '!src/**/*.pyc'
   - package.json
+  - package-lock.json
   - LICENSE
   - NOTICE
   - docs/licenses/**/*
 extraResources:
+  - from: node_modules/.micro-multi-framework
+    to: framework-source
   - from: build/desktop/python
     to: python
   - from: build/desktop/runtime-manifest.json

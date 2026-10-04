@@ -11,11 +11,32 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from masp.extension_sources import discard_source, package_manager
+from masp.extension_sources import dependency_environment, discard_source, package_manager
 from masp.native_process import ProcessJob, native_creation_flags
 from masp.storage import Store, identifier, now
 
 _guard = threading.Lock()
+
+
+def build_dependency_command(root: Path, manager: str, executable: str) -> dict[str, Any] | None:
+    data = json.loads((root / "package.json").read_text("utf-8"))
+    if not data.get("devDependencies"):
+        return None
+    argv = (
+        [executable, "install", "--prod=false", "--ignore-scripts", "--no-frozen-lockfile"]
+        if manager == "pnpm"
+        else [
+            executable,
+            "install",
+            "--include=dev",
+            "--include=optional",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--package-lock=false",
+        ]
+    )
+    return {"cwd": str(root), "argv": argv, "purpose": "Install package-local build dependencies"}
 
 
 def run_build(command: dict[str, Any]) -> tuple[int, str]:
@@ -30,6 +51,7 @@ def run_build(command: dict[str, Any]) -> tuple[int, str]:
         errors="replace",
         creationflags=native_creation_flags(),
         start_new_session=sys.platform != "win32",
+        env=dependency_environment(),
     )
     job = None
     try:
@@ -37,7 +59,11 @@ def run_build(command: dict[str, Any]) -> tuple[int, str]:
         process.wait(timeout=240)
         output_file.seek(0, os.SEEK_END)
         output_file.seek(max(0, output_file.tell() - 16_000))
-        output = output_file.read().decode("utf-8", errors="replace")
+        raw = output_file.read()
+        try:
+            output = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            output = raw.decode("mbcs" if sys.platform == "win32" else "utf-8", errors="replace")
         return process.returncode, output[-4000:]
     finally:
         if job:
@@ -85,6 +111,37 @@ def prepare_build(
     scripts = data.get("scripts", {})
     if not isinstance(scripts, dict) or not isinstance(scripts.get("build"), str):
         return None
+    # A runtime/activation error is not evidence that published artifacts need
+    # rebuilding. npm packages often ship dist without their Vite source tree.
+    artifacts: list[Path] = []
+
+    def entry_paths(value: Any) -> None:
+        if isinstance(value, str) and value.startswith("."):
+            artifacts.append(root / value)
+        elif isinstance(value, dict):
+            for key, child in value.items():
+                if key != "types":
+                    entry_paths(child)
+
+    if isinstance(data.get("main"), str):
+        artifacts.append(root / data["main"])
+    exports = data.get("exports", {})
+    if isinstance(exports, dict):
+        if any(key.startswith(".") for key in exports):
+            for key in (".", "./client"):
+                entry_paths(exports.get(key))
+        else:
+            entry_paths(exports)
+    else:
+        entry_paths(exports)
+    native = data.get("microMulti", {}).get("cordis", {})
+    if native.get("entry"):
+        artifacts.append(root / native["entry"])
+    for item in native.get("plugins", []):
+        if item.get("entry"):
+            artifacts.append(root / item["entry"])
+    if artifacts and all(path.is_file() for path in artifacts):
+        return None
     manager, executable = package_manager(root)
     revision = source_revision(root)
     commands = [
@@ -96,6 +153,9 @@ def prepare_build(
             },
         }
     ]
+    dependencies = build_dependency_command(root, manager, executable)
+    if dependencies:
+        commands.insert(0, dependencies)
     record = {
         "id": identifier("build"),
         "status": "pending",
@@ -136,7 +196,16 @@ def approve_build(
         store.update("extension_build", build_id, status="running", decided_at=now())
     try:
         outputs = []
-        for command in record["commands"]:
+        commands = list(record["commands"])
+        if not any(
+            command.get("purpose") == "Install package-local build dependencies"
+            for command in commands
+        ):
+            manager, executable = package_manager(root)
+            dependencies = build_dependency_command(root, manager, executable)
+            if dependencies:
+                commands.insert(0, dependencies)
+        for command in commands:
             returncode, output = run_build(command)
             outputs.append(output)
             if returncode:

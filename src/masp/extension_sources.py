@@ -1,6 +1,7 @@
 """Acquire npm/git bundles into app-owned sources; registration remains transactional."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -10,6 +11,16 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from masp.native_process import native_creation_flags
+
+
+def dependency_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in list(env):
+        if key.lower() in {"npm_config_omit", "npm_config_production", "npm_config_only"}:
+            del env[key]
+    env["NODE_ENV"] = "development"
+    env["NPM_CONFIG_PRODUCTION"] = "false"
+    return env
 
 
 def remote_source(source: str) -> bool:
@@ -44,6 +55,7 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
             errors="replace",
             timeout=240,
             creationflags=native_creation_flags(),
+            env=dependency_environment(),
         )
         if result.returncode:
             raise ValueError(
@@ -112,6 +124,7 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
                             executable,
                             "install",
                             "--ignore-scripts",
+                            "--prod=false",
                             "--frozen-lockfile"
                             if (root / "pnpm-lock.yaml").is_file()
                             else "--no-frozen-lockfile",
@@ -120,7 +133,18 @@ def acquire_bundle(home: Path, source: str) -> tuple[Path, Path]:
                     )
                 else:
                     command = "ci" if (root / "package-lock.json").is_file() else "install"
-                    run([executable, command, "--ignore-scripts", "--no-audit", "--no-fund"], root)
+                    run(
+                        [
+                            executable,
+                            command,
+                            "--include=dev",
+                            "--include=optional",
+                            "--ignore-scripts",
+                            "--no-audit",
+                            "--no-fund",
+                        ],
+                        root,
+                    )
         if not root.is_dir():
             raise ValueError("Acquired bundle has no package directory")
         return root, stage

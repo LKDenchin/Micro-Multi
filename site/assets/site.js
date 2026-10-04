@@ -5,6 +5,7 @@ for (const link of document.querySelectorAll('.sidebar nav a')) {
     link.setAttribute('aria-current', 'page');
   }
 }
+const chinese = document.documentElement.lang === 'zh-CN';
 const search = document.getElementById('doc-search');
 const results = document.getElementById('search-results');
 if (search && results) {
@@ -23,7 +24,7 @@ if (search && results) {
       });
       if (current !== generation) return;
       const terms = query.split(/\s+/);
-      const matches = documents.filter(doc => terms.every(term => (doc.title + ' ' + doc.text).toLocaleLowerCase().includes(term)))
+      const matches = documents.filter(doc => doc.lang === document.documentElement.lang && terms.every(term => (doc.title + ' ' + doc.text).toLocaleLowerCase().includes(term)))
         .sort((a, b) => Number(b.title.toLocaleLowerCase().includes(query)) - Number(a.title.toLocaleLowerCase().includes(query)))
         .slice(0, 7);
       for (const doc of matches) {
@@ -32,9 +33,9 @@ if (search && results) {
         link.textContent = doc.title;
         results.append(link);
       }
-      if (!matches.length) results.textContent = 'No results / 未找到结果';
+      if (!matches.length) results.textContent = chinese ? '未找到结果' : 'No results';
     } catch {
-      results.textContent = 'Use the guide list below / 请使用下方文档目录';
+      results.textContent = chinese ? '请使用下方文档目录' : 'Use the guide list below';
     }
   });
   search.addEventListener('keydown', event => {

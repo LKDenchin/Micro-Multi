@@ -13,6 +13,8 @@ from typing import Any
 
 from masp.cordis_runtime import CordisWorker, composed_manifest
 from masp.model_runtime import (
+    compatible_model_stream,
+    complete_stream_result,
     configure_provider,
     merge_stream_identifier,
     model_stream_lines,
@@ -119,6 +121,13 @@ async def native_chat_events(
             }
             if not payload["tools"]:
                 payload.pop("tools")
+            if "/api/dsh/plugins/" in config.base_url:
+                payload["session_id"] = conversation_id
+                selection = store.get("conversation", conversation_id).get("model_selection") or {}
+                if selection.get("reasoningEffort") and config.model == json.dumps(
+                    [selection.get("provider"), selection.get("model")], separators=(",", ":")
+                ):
+                    payload["reasoning_effort"] = selection["reasoningEffort"]
             configure_provider(payload, config.base_url, recovering=False)
             headers = {"Authorization": "Bearer " + config.api_key} if config.api_key else {}
             blocks: dict[int, dict[str, Any]] = {}
@@ -131,7 +140,8 @@ async def native_chat_events(
             finish = None
             async with (
                 asyncio.timeout(max(0.01, min(remaining(), 900))),
-                client.stream(
+                compatible_model_stream(
+                    client,
                     "POST",
                     config.base_url + "/chat/completions",
                     headers=headers,
@@ -193,6 +203,10 @@ async def native_chat_events(
                                 "argumentsDelta": fn.get("arguments", ""),
                             }
                         )
+            if finish is None and complete_stream_result(
+                "".join(block.get("text", "") for block in blocks.values()), calls
+            ):
+                finish = "tool_calls" if calls else "stop"
             if finish is None:
                 raise RuntimeError("Model stream ended without a terminal frame")
             for index, block in sorted({**blocks, **calls}.items()):

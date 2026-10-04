@@ -134,6 +134,7 @@ class ChatMessageCreate(StrictModel):
     max_context_tokens: int = Field(default=64000, ge=4000, le=256000)
     autonomous_hours: float = Field(default=8, ge=0.01, le=8)
     auto_compact: bool = True
+    review_team_plan: bool = False
     execute_team_now: bool = False
     team_version: int | None = None
     execute_plan_now: bool = False

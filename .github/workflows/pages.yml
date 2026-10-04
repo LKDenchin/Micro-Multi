@@ -24,6 +24,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - run: python -m pip install -r requirements-site.txt
       - run: python scripts/build_site.py
+      - run: python scripts/verify_site.py
       - uses: actions/upload-pages-artifact@v4
         with:
           path: build/site

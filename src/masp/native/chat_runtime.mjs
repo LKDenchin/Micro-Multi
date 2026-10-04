@@ -24,16 +24,16 @@ async function* bridge(write,requestId,kind,data,signal){
   return pending.result;
  }finally{signal?.removeEventListener('abort',abort);bridges.delete(bridgeId);}
 }
-async function bridgeValue(write,id,kind,data,signal){
+export async function bridgeValue(write,id,kind,data,signal){
  const iterator=bridge(write,id,kind,data,signal);
  while(true){const next=await iterator.next();if(next.done)return next.value;}
 }
 export async function runNativeChat(root,request,write,controllers){
  const controller=new AbortController();controllers.set(String(request.id),controller);
  const signal=controller.signal,children=new Map(),childIds=new Map();
- let main,steps=0;
+ let main;const agentSteps=new Map();
  const nativeNames=new Set(root.tools.schemas().map(tool=>tool.name));
- const receipts=new Map(),noEvidenceRetries=new Map();
+ const receipts=new Map(),noEvidenceRetries=new Map(),toolHistories=new Map();
  const event=(kind,data)=>write({event:'chat-event',requestId:request.id,kind,data});
  const owned=agent=>agent?.id===main?.agent.id||childIds.has(agent?.id);
  const disposers=[];
@@ -114,6 +114,17 @@ export async function runNativeChat(root,request,write,controllers){
  };
  disposers.push(root.on('tools/pre-execute',async(exec,next)=>{
   if(!owned(exec.agent))return next();
+  if(!['wait_subagents','get_subagent_status'].includes(exec.name)){
+   const history=toolHistories.get(exec.agent.id)??[];
+   history.push(exec.name+':'+JSON.stringify(exec.arguments));if(history.length>32)history.shift();toolHistories.set(exec.agent.id,history);
+   for(let period=1;period<=4;period++){
+    if(history.length<period*3)continue;
+    const pattern=JSON.stringify(history.slice(-period));let count=1;
+    while((count+1)*period<=history.length&&JSON.stringify(history.slice(-(count+1)*period,-count*period))===pattern)count++;
+    if(count>=8){exec.agent.cancel('user');throw Error('Repeated tool cycle stopped: preserve completed work and change the approach.');}
+    if(count===3||count===5)exec.agent.steer({id:randomUUID(),role:'user',source:{kind:'user'},content:[{type:'text',text:'Repeated tool sequence detected. Stop undoing prior edits or rereading the same material; verify the current result and advance the original task.'}]});
+   }
+  }
   if(nativeNames.has(exec.name)){
    const allowed=await bridgeValue(write,request.id,'authorize',{name:exec.name,arguments:exec.arguments,agentId:exec.agent?.id},exec.signal);
    if(!allowed)throw Error('User did not approve this operation');
@@ -143,7 +154,8 @@ export async function runNativeChat(root,request,write,controllers){
  }));
  disposers.push(root.on('agent/pre-step',async function(payload,next){
   if(!owned(payload.agent))return next();
-  if(signal.aborted||++steps>request.maxSteps){payload.agent.cancel('user');return {kind:'reject'};}
+  const steps=(agentSteps.get(payload.agent.id)??0)+1;agentSteps.set(payload.agent.id,steps);
+  if(signal.aborted||steps>request.maxSteps){payload.agent.cancel('user');return {kind:'reject'};}
   const ready=payload.agent.id===main.agent.id?consumeReady():{reports:[]};
   if(ready.reports.length)payload.agent.inject({id:randomUUID(),role:'user',source:{kind:'user'},content:[{type:'text',text:'Completed child reports: '+JSON.stringify(ready)}]});
   return next();
@@ -162,7 +174,7 @@ export async function runNativeChat(root,request,write,controllers){
   const events=main.agent.session.snapshotEvents();
   const terminal=events.filter(event=>event.type==='turn/end').at(-1);
   return {runtime:'native-agent-loop',sessionId:main.agent.id,eventCount:events.length,cancelled:signal.aborted,
-   stopReason:terminal?.data?.stopReason,missingExecution:request.requiresExecution&&!receipts.has(main.agent.id)};
+   stopReason:terminal?.data?.stopReason??terminal?.data?.reason?.kind,missingExecution:request.requiresExecution&&!receipts.has(main.agent.id)};
  }finally{
   controller.abort();await Promise.allSettled([...children.values()].map(entry=>entry.promise));
   await main?.dispose();for(const dispose of disposers.reverse())dispose();controllers.delete(String(request.id));

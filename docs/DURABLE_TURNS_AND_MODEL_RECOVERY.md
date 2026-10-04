@@ -1,7 +1,11 @@
-# 对话保存与恢复
+# Conversations, streaming and model recovery
 
-Micro-Multi 将项目、对话、工具事件和流式回复保存在本地数据目录。重新打开应用后，从对话列表继续工作。较长会话通过上下文压缩保留任务信息。
+Projects, conversations, tool events and streamed replies are stored in the local data directory. Reopen a saved conversation to continue work. Context compaction retains task information and loop-detection state for longer sessions.
 
-停止当前执行会保留已记录内容。网络或模型调用失败时，检查模型地址、连接和凭据，再从已有对话继续。工具操作的实际结果以工作区文件与工具记录为准；恢复时先检查已经执行的操作。
+Stream events are coalesced while preserving semantic boundaries and final status. Batched persistence, incremental replay, scheduled Markdown rendering and merged directory refreshes reduce repeated work. SQLite retains WAL and full synchronization. MCP discovery is cached, connections are reused, and cancellation cleans up active calls.
 
-桌面端监测后端退出和渲染进程状态，记录诊断并恢复工作界面。诊断文件位于应用数据目录，分享前清理密钥和私人内容。
+Compatible model requests accept SSE or JSON replies, text content blocks, reasoning fields and structured tool arguments. When a provider explicitly rejects an optional parameter before generation with HTTP 400/422, bounded negotiation removes that optional parameter or renames the token limit when the provider identifies the replacement. Messages, tools, model selection and authentication remain mandatory. Negotiation is cached per endpoint/model.
+
+Stopping preserves recorded content. Network failures and truncation retain their actual cause; unfinished output is not marked as successful. Check endpoint, network and credentials, then continue the existing conversation. Inspect files and tool records before repeating operations with side effects.
+
+The desktop monitors backend exits and renderer state, records diagnostics and restores the workspace. Logs are in the application data directory; redact secrets before sharing. See [deployment](deployment.md) for storage paths and [current changes](CURRENT_CHANGES.md) for this source update.

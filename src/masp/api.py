@@ -11,10 +11,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.routing import Match
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from masp.agents import extract_dsml_tool_calls
@@ -40,6 +41,7 @@ from masp.domain import (
     RunCreate,
     SkillInput,
     State,
+    TeamAgentInput,
     TeamGenerate,
     TeamInput,
     TeamStart,
@@ -51,9 +53,13 @@ from masp.mcp_server import BUILTIN_MCP_SERVER_ID, builtin_mcp_server_record, bu
 from masp.memory_os import MemoryOS
 from masp.model_runtime import (
     ModelRecovery,
+    compatible_model_post,
+    compatible_model_stream,
+    complete_stream_result,
     configure_provider,
     merge_stream_identifier,
     model_stream_lines,
+    model_text,
     preserve_partial_response,
     requests_execution,
     response_deadline,
@@ -91,7 +97,24 @@ class LocalRequestGuard:
     def __init__(self, app: ASGIApp):
         self.app = app
 
+    @staticmethod
+    def plugin_http_route(scope: Scope) -> bool:
+        # Resolve exactly as the router does. Native routes own their body
+        # format (including multipart/binary), while core APIs require JSON.
+        for route in getattr(scope.get("app"), "routes", ()):
+            matched, _child = route.matches(scope)
+            if matched == Match.FULL:
+                return route.name == "plugin_http"
+        return False
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "websocket":
+            headers = dict(scope["headers"])
+            origin = headers.get(b"origin", b"").decode()
+            host = headers.get(b"host", b"").decode()
+            if origin and urlsplit(origin).netloc != host:
+                await send({"type": "websocket.close", "code": 1008})
+                return
         if scope["type"] == "http" and scope["method"] not in {"GET", "HEAD", "OPTIONS"}:
             headers = dict(scope["headers"])
             origin = headers.get(b"origin", b"").decode()
@@ -104,6 +127,7 @@ class LocalRequestGuard:
             if (
                 scope["method"] != "DELETE"
                 and headers.get(b"content-type", b"").split(b";")[0] != b"application/json"
+                and not self.plugin_http_route(scope)
             ):
                 await JSONResponse({"detail": "Use application/json"}, 415)(scope, receive, send)
                 return
@@ -637,7 +661,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
     def extension_surface(plugin_id: str) -> dict[str, Any]:
         from masp.plugin_surface import surface_info
 
-        return surface_info(service().store, plugin_id)
+        return surface_info(service().store, plugin_id, service().home)
 
     @app.get("/api/dsh/plugins/{plugin_id}/surface/{asset}")
     def extension_surface_asset(plugin_id: str, asset: str) -> FileResponse:
@@ -653,6 +677,92 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         from masp.plugin_surface import surface_host
 
         worker = await asyncio.to_thread(surface_host, service().store, service().home, plugin_id)
+        if body.get("channel") == "/micro-multi" and body.get("method") == "read-attachment":
+            payload = body.get("payload") or {}
+            session_id = payload.get("sessionId")
+            if not isinstance(session_id, str) or not isinstance(payload.get("attachmentId"), str):
+                raise ValueError("Invalid attachment identity")
+            service().store.get("conversation", session_id)
+            attachment_id = payload.get("attachmentId")
+
+            def find_reference(value: Any) -> dict[str, Any] | None:
+                pending = [value]
+                while pending:
+                    current = pending.pop()
+                    if isinstance(current, dict):
+                        if current.get("attachmentId") == attachment_id and current.get(
+                            "mediaType"
+                        ):
+                            return current
+                        pending.extend(current.values())
+                    elif isinstance(current, list):
+                        pending.extend(current)
+                return None
+
+            reference = find_reference(service().store.list("message", session_id))
+            if not reference:
+                return {
+                    "result": {
+                        "ok": False,
+                        "error": {
+                            "code": "session/attachment-invalid",
+                            "message": "Image is not referenced by this conversation",
+                        },
+                    }
+                }
+            value = await asyncio.to_thread(
+                worker.request, "plugin-attachment", reference=reference
+            )
+            return {"result": {"ok": True, "value": value}}
+        if body.get("channel") == "/micro-multi" and body.get("method") == "model-directory":
+            payload = body.get("payload") or {}
+            catalog = await asyncio.to_thread(
+                worker.request, "plugin-models", timeout=60, pluginId=plugin_id
+            )
+            session_id = payload.get("sessionId")
+            conversation = service().store.get("conversation", session_id) if session_id else {}
+            selection = payload.get("selection")
+            if selection is not None:
+                match = next(
+                    (
+                        model
+                        for model in catalog["models"]
+                        if model["provider"] == selection.get("provider")
+                        and model["id"] == selection.get("model")
+                    ),
+                    None,
+                )
+                if match is None:
+                    raise ValueError("模型已不在插件目录中")
+                effort = selection.get("reasoningEffort")
+                levels = (match.get("reasoning") or {}).get("efforts", [])
+                if effort and effort not in {level["id"] for level in levels}:
+                    raise ValueError("模型不支持此推理等级")
+                if session_id:
+                    service().store.update("conversation", session_id, model_selection=selection)
+            current = selection or payload.get("current") or conversation.get("model_selection")
+            if current and not selection:
+                stored = conversation.get("model_selection")
+                if stored and all(
+                    stored.get(key) == current.get(key) for key in ("provider", "model")
+                ):
+                    current = stored
+            groups = [
+                {
+                    **provider,
+                    "models": [
+                        model for model in catalog["models"] if model["provider"] == provider["id"]
+                    ],
+                }
+                for provider in catalog["providers"]
+            ]
+            return {
+                "result": {
+                    "current": current,
+                    "groups": groups,
+                    "failures": catalog.get("failures", []),
+                }
+            }
         return await asyncio.to_thread(
             worker.request,
             "plugin-rpc",
@@ -677,6 +787,58 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             rpc_stream(service().store, service().home, plugin_id, body),
             media_type="application/x-ndjson",
         )
+
+    @app.websocket("/api/dsh/plugins/{plugin_id}/rpc/socket")
+    async def extension_rpc_socket(plugin_id: str, socket: WebSocket) -> None:
+        import anyio
+
+        from masp.plugin_surface import rpc_stream
+
+        await socket.accept()
+        tasks: list[asyncio.Task[Any]] = []
+        stream = None
+        try:
+            raw = await asyncio.wait_for(socket.receive_text(), 10)
+            if len(raw.encode("utf-8")) > 500000:
+                await socket.close(code=1009)
+                return
+            body = json.loads(raw)
+            if not isinstance(body, dict):
+                await socket.close(code=1008)
+                return
+            stream = rpc_stream(service().store, service().home, plugin_id, body)
+
+            async def publish() -> None:
+                assert stream is not None
+                async for packet in stream:
+                    await socket.send_text(packet)
+
+            async def disconnected() -> None:
+                while True:
+                    if (await socket.receive())["type"] == "websocket.disconnect":
+                        return
+
+            tasks = [asyncio.create_task(publish()), asyncio.create_task(disconnected())]
+            done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                task.result()
+            if tasks[0] in done:
+                await socket.close(code=1000)
+        except WebSocketDisconnect:
+            pass
+        except (ValueError, TimeoutError, RuntimeError):
+            try:
+                await socket.close(code=1008)
+            except RuntimeError:
+                pass
+        finally:
+            with anyio.CancelScope(shield=True):
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                if stream is not None:
+                    await stream.aclose()
 
     @app.post("/api/dsh/plugins/{plugin_id}/models/chat/completions")
     async def extension_model_stream(plugin_id: str, body: dict[str, Any]) -> StreamingResponse:
@@ -747,7 +909,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         headers = {"Authorization": f"Bearer {config.api_key}"} if config.api_key else {}
         try:
             async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
+                response = await compatible_model_post(
+                    client,
                     config.base_url + "/chat/completions",
                     headers=headers,
                     json={
@@ -758,7 +921,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                 )
                 response.raise_for_status()
                 result = response.json()
-                answer = result["choices"][0]["message"]["content"]
+                answer = model_text(result["choices"][0]["message"]["content"])
                 return {"status": "ok", "model": config.model, "reply": str(answer)[:120]}
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as error:
             raise HTTPException(502, f"模型连接失败：{type(error).__name__}") from None
@@ -815,7 +978,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         headers = {"Authorization": f"Bearer {config.api_key}"} if config.api_key else {}
         try:
             async with httpx.AsyncClient(timeout=config.timeout_seconds) as client:
-                response = await client.post(
+                response = await compatible_model_post(
+                    client,
                     config.base_url + "/chat/completions",
                     headers=headers,
                     json={
@@ -845,7 +1009,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     },
                 )
                 response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"].strip()
+                content = model_text(response.json()["choices"][0]["message"]["content"]).strip()
         except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as error:
             raise HTTPException(502, f"团队规划失败：{type(error).__name__}") from None
         if content.startswith(chr(96) * 3):
@@ -853,14 +1017,22 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         try:
             generated = json.loads(content)["agents"]
             preserved = {agent["id"]: agent for agent in locked}
-            agents = {agent["id"]: agent for agent in generated}
+            manual_models = {
+                agent["id"]: agent.get("model_profile_id") or ""
+                for agent in (previous or {}).get("agents", [])
+                if (previous or {}).get("custom_configured")
+            }
+            agents = {
+                agent["id"]: {**agent, "model_profile_id": manual_models.get(agent["id"], "")}
+                for agent in generated
+            }
             agents.update(preserved)
             draft = TeamInput(
                 requirement=body.requirement,
                 main_profile_id=body.main_profile_id,
                 review_profile_id=previous.get("review_profile_id") if previous else None,
                 review_mode=previous.get("review_mode", "adaptive") if previous else "adaptive",
-                agents=list(agents.values()),
+                agents=[TeamAgentInput.model_validate(agent) for agent in agents.values()],
                 max_concurrency=body.max_concurrency,
                 version=previous["version"] if previous else None,
                 conversation_id=conv_id,
@@ -942,7 +1114,9 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         store.put("team_version", {**team, "id": f"{project_id}-v{version}"}, project_id)
         if conv_id:
             try:
-                store.update("conversation", conv_id, team=team)
+                store.update(
+                    "conversation", conv_id, team=team, model_profile_id=body.main_profile_id
+                )
             except KeyError:
                 pass
         return team
@@ -1854,6 +2028,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
 
         event_data: dict[str, Any] = {
             "name": fn_name,
+            "arguments": raw_args,
             "short_name": short_name,
             "category": category,
             "status": status,
@@ -1979,7 +2154,11 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             )
         )
         selected_agent = None
-        active_profile_id = body.model_profile_id or conversation.get("model_profile_id")
+        active_profile_id = (
+            body.model_profile_id
+            or ((conv_team or {}).get("main_profile_id") if not main_only else None)
+            or conversation.get("model_profile_id")
+        )
         if body.agent_id and body.agent_id not in {"main", "main_only"}:
             raise HTTPException(422, "仅支持多 Agent 协作和单主 Agent 模式；子代理由主 Agent 调度")
         try:
@@ -2234,6 +2413,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             thinking_started_at: float | None = None
             thinking_duration_ms: int = 0
             thinking_text = ""
+            planning_work = ""
+            planning_work_emitted = 0.0
             thinking_done_emitted = False
             repeat_guard = RepeatToolReminder()
             tool_pruner = ToolResultPruner(threshold_chars=3600, head_chars=1200, tail_chars=800)
@@ -2256,7 +2437,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
 
             had_team_before_turn = bool(conv_team and conv_team.get("agents"))
             need_team_confirm = (
-                not main_only
+                body.review_team_plan
+                and not main_only
                 and not selected_agent
                 and not (
                     body.execute_team_now
@@ -2266,6 +2448,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     and not conv_team.get("approval_consumed")
                 )
             )
+            if need_team_confirm:
+                yield 'event: planning\ndata: {"internal":true}\n\n'
 
             headers = {}
             if config.api_key:
@@ -2648,7 +2832,14 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                         1,
                         {
                             "role": "system",
-                            "content": "本轮必须重新提交协作方案，旧轮批准不适用。先分析任务、读取必要资料、在工作区写清需求/设计/任务文档，全部拆分后调用 start_subagents 提交完整任务列表（提示词、负责人、模型、文件归属、依赖、验收标准）。该调用只提交待审核方案，不执行。提交后向用户说明并结束本轮，等待用户编辑并确认。不得执行实施命令或提前启动子代理。简单问答可直接回答。",
+                            "content": "本轮必须重新提交协作方案，旧轮批准不适用。先分析任务、读取必要资料、在工作区写清需求/设计/任务文档，全部拆分后调用 start_subagents 提交完整任务列表（提示词、负责人、模型、文件归属、依赖、验收标准）。该调用只提交待审核方案，不执行。提交后结束本轮，等待用户编辑并确认。不得执行实施命令或提前启动子代理。简单问答可直接回答。子代理默认跟随主模型，工具不得自行切换模型；仅用户在团队编辑界面手动修改后使用其他模型。可用配置（仅供识别）："
+                            + json.dumps(
+                                [
+                                    {"id": item["id"], "name": item["name"]}
+                                    for item in model_profiles()
+                                ],
+                                ensure_ascii=False,
+                            ),
                         },
                     )
                 if supervisor.subagents:
@@ -2682,6 +2873,16 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             {**previous_tasks.get(task["subagent_name"], {}), **task}
                             for task in approved_tasks
                         ]
+                        if not approved_tasks and not body.execute_team_now:
+                            approved_tasks = [
+                                {
+                                    "subagent_name": "task_worker",
+                                    "role": "独立协作",
+                                    "prompt": "为主代理提供独立核查或可直接采用的内容建议。只完成这一项协作贡献，不修改共享文件，不启动其他代理，不重复复审。原始请求："
+                                    + body.content,
+                                    "owned_paths": [],
+                                }
+                            ]
                         if approved_tasks:
                             started = supervisor.start_subagents(
                                 approved_tasks,
@@ -2715,7 +2916,11 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             1,
                             {
                                 "role": "system",
-                                "content": "用户已批准本轮团队方案。按以下已审核负责人、职责、模型、文件归属执行，不得启动未审核的额外任务："
+                                "content": (
+                                    "用户已批准本轮团队方案。按以下已审核负责人、职责、模型、文件归属执行，不得启动未审核的额外任务："
+                                    if body.execute_team_now
+                                    else "已启动真实协作成员。主代理继续执行原始任务，可按实际需要分配额外独立任务，并合并成员结果："
+                                )
                                 + json.dumps(
                                     supervisor.team_obj.get("agents", []), ensure_ascii=False
                                 ),
@@ -2800,10 +3005,13 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             elif native_kind == "team":
                                 conv_team = {**(conv_team or {}), **native_data}
                                 store.update("conversation", conversation_id, team=conv_team)
-                            elif native_kind == "native-runtime" and native_data.get(
-                                "missingExecution"
-                            ):
-                                termination_reason = "no_execution_evidence"
+                            elif native_kind == "native-runtime":
+                                if native_data.get("missingExecution"):
+                                    termination_reason = "no_execution_evidence"
+                                elif native_data.get("stopReason") != "completed":
+                                    termination_reason = "native_" + str(
+                                        native_data.get("stopReason") or "loop_incomplete"
+                                    )
                             yield (
                                 f"event: {native_kind}\ndata: "
                                 + json.dumps(native_data, ensure_ascii=False)
@@ -2854,6 +3062,17 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                 if (stop_tools_next_turn or turn >= max_tool_steps - 1)
                                 else "auto"
                             )
+                        if "/api/dsh/plugins/" in config.base_url:
+                            payload["session_id"] = conversation_id
+                            selection = (
+                                store.get("conversation", conversation_id).get("model_selection")
+                                or {}
+                            )
+                            if selection.get("reasoningEffort") and config.model == json.dumps(
+                                [selection.get("provider"), selection.get("model")],
+                                separators=(",", ":"),
+                            ):
+                                payload["reasoning_effort"] = selection["reasoningEffort"]
                         configure_provider(
                             payload, config.base_url, recovering=bool(recovery.records)
                         )
@@ -2866,6 +3085,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                         solo_stream_failed = False
                         finish_reason = None
                         stream_interrupted = False
+                        stream_failure = None
                         saw_done = False
                         usage: dict[str, Any] = {}
                         try:
@@ -2873,7 +3093,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                 asyncio.timeout(
                                     min(response_deadline(config), max(0.01, work_budget.remaining))
                                 ),
-                                client.stream(
+                                compatible_model_stream(
+                                    client,
                                     "POST",
                                     config.base_url + "/chat/completions",
                                     headers=headers,
@@ -3004,13 +3225,29 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                                     + "\n\n"
                                                 )
                                             content += text
+                                            if need_team_confirm:
+                                                planning_work += text
+                                                if time.monotonic() - planning_work_emitted >= 0.2:
+                                                    planning_work_emitted = time.monotonic()
+                                                    yield (
+                                                        "event: work\ndata: "
+                                                        + json.dumps(
+                                                            {
+                                                                "kind": "work",
+                                                                "status": "running",
+                                                                "content": planning_work[-12000:],
+                                                            },
+                                                            ensure_ascii=False,
+                                                        )
+                                                        + "\n\n"
+                                                    )
                                             if not dsml_suppressed and re.search(
                                                 r"(?:<[|｜]{1,2}\s*(?:DSML|tool[_▁]|invoke|calls)|<\s*(?:configure_team|start_team)\b)",
                                                 content,
                                                 re.IGNORECASE,
                                             ):
                                                 dsml_suppressed = True
-                                            if not dsml_suppressed:
+                                            if not dsml_suppressed and not need_team_confirm:
                                                 if re.search(r"<[|｜]{1,2}[^>]*$", content):
                                                     pass
                                                 else:
@@ -3053,9 +3290,29 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                                 target["function"]["arguments"] += str(
                                                     function.get("arguments") or ""
                                                 )
-                        except Exception:
+                        except Exception as stream_error:
+                            stream_failure = {
+                                "detail": str(stream_error),
+                                "type": type(stream_error).__name__,
+                            }
                             stream_interrupted = True
-                        if not saw_done and finish_reason is None and not aborted_by_user:
+                            yield (
+                                "event: model-error\ndata: "
+                                + json.dumps(
+                                    {
+                                        "detail": str(stream_error),
+                                        "type": type(stream_error).__name__,
+                                    },
+                                    ensure_ascii=False,
+                                )
+                                + "\n\n"
+                            )
+                        if (
+                            not saw_done
+                            and finish_reason is None
+                            and not aborted_by_user
+                            and not complete_stream_result(content, calls)
+                        ):
                             stream_interrupted = True
                         if solo_stream_failed:
                             yield 'event: error\ndata: {"detail":"模型服务请求失败"}\n\n'
@@ -3127,6 +3384,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                 "content_chars": len(content),
                                 "tool_calls": len(calls),
                                 "stream_interrupted": stream_interrupted,
+                                "error": stream_failure,
                             }
                         )
                         recovery_reason = recovery.reason(
@@ -3175,7 +3433,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             flags=re.IGNORECASE,
                         )
                         content = re.sub(r"<\/?\s*[|｜]{1,2}[^>]*>", "", content)
-                        if content.strip():
+                        if content.strip() and not need_team_confirm:
                             segments.append({"type": "text", "content": content})
                         if (
                             not calls
@@ -3329,6 +3587,11 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                 aborted_by_user = True
                                 break
                             function = call["function"]
+                            if (
+                                need_team_confirm
+                                and function["name"] == "dispatch_subagents_parallel"
+                            ):
+                                function = {**function, "name": "start_subagents"}
                             if need_team_confirm:
                                 from masp.team_review import planning_tool_allowed
 
@@ -3528,7 +3791,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                         role=args_obj["role"],
                                         description=args_obj["description"],
                                         system_prompt=args_obj.get("system_prompt", ""),
-                                        model=args_obj.get("model"),
+                                        model=None,
                                     )
                                     conv_team = supervisor.team_obj
                                     if project:
@@ -3552,7 +3815,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                                         role=args_obj.get("role"),
                                         description=args_obj.get("description"),
                                         system_prompt=args_obj.get("system_prompt"),
-                                        model=args_obj.get("model"),
+                                        model=None,
                                     )
                                     if adjusted_spec:
                                         conv_team = supervisor.team_obj
@@ -3957,8 +4220,24 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                         )
                         if turn_tool_batch:
                             segments.append({"type": "tools", "events": turn_tool_batch})
+                        if (
+                            need_team_confirm
+                            and supervisor
+                            and supervisor.team_obj.get("pending_tasks")
+                        ):
+                            termination_reason = "awaiting_team_approval"
+                            if not any(item.get("type") == "team_plan" for item in segments):
+                                plan_data = supervisor.get_team_event_data()
+                                segments.append({"type": "team_plan", "team": plan_data})
+                                yield (
+                                    "event: team\ndata: "
+                                    + json.dumps(plan_data, ensure_ascii=False)
+                                    + "\n\n"
+                                )
                         if native_concluded:
                             termination_reason = "native_tool_concluded"
+                            break
+                        if termination_reason == "awaiting_team_approval":
                             break
                         if aborted_by_user:
                             break
@@ -3977,8 +4256,14 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     yield (
                         "event: tool\ndata: " + json.dumps(cleanup_evt, ensure_ascii=False) + "\n\n"
                     )
+                if need_team_confirm and termination_reason != "awaiting_team_approval":
+                    yield 'event: planning\ndata: {"internal":false}\n\n'
+                    if content.strip():
+                        answer = content
+                        segments.append({"type": "text", "content": content})
+                        yield "data: " + json.dumps({"delta": content}, ensure_ascii=False) + "\n\n"
                 visible_tail = visible_output.push("", final=True)
-                if visible_tail:
+                if visible_tail and not need_team_confirm:
                     answer += visible_tail
                     yield (
                         "data: " + json.dumps({"delta": visible_tail}, ensure_ascii=False) + "\n\n"
@@ -4155,7 +4440,11 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     notice = f"\n\n本轮自动恢复后仍未完成（{termination_reason}），以上内容不代表已经交付。"
                     answer += notice
                     yield "data: " + json.dumps({"delta": notice}, ensure_ascii=False) + "\n\n"
-                if not answer.strip() and not aborted_by_user:
+                if (
+                    not answer.strip()
+                    and not aborted_by_user
+                    and termination_reason != "awaiting_team_approval"
+                ):
                     answer = f"自动恢复 {recovery.attempts} 次后仍未完成：{termination_reason or 'empty_response'}。已保留执行记录，未将本轮标记为成功。"
                     yield "data: " + json.dumps({"delta": answer}, ensure_ascii=False) + "\n\n"
                 if answer or recorded_tools or aborted_by_user:
@@ -4165,7 +4454,8 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             if post is None:
                                 raise RuntimeError("title endpoint unavailable")
                             title_response = await asyncio.wait_for(
-                                post(
+                                compatible_model_post(
+                                    client,
                                     config.base_url + "/chat/completions",
                                     headers=headers,
                                     json={
@@ -4190,7 +4480,9 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             )
                             title_response.raise_for_status()
                             suggested = (
-                                str(title_response.json()["choices"][0]["message"]["content"])
+                                model_text(
+                                    title_response.json()["choices"][0]["message"]["content"]
+                                )
                                 .strip()
                                 .strip("\"'`# ")
                             )
@@ -4215,6 +4507,19 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             + json.dumps({"title": title}, ensure_ascii=False)
                             + "\n\n"
                         )
+                    if need_team_confirm:
+                        yield (
+                            "event: work\ndata: "
+                            + json.dumps(
+                                {
+                                    "kind": "work",
+                                    "status": "complete",
+                                    "content": planning_work[-12000:],
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n\n"
+                        )
                     thinking_meta = (
                         {
                             "duration_ms": thinking_duration_ms,
@@ -4237,7 +4542,15 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             "termination_reason": termination_reason,
                             "model_steps": model_steps if session_log_enabled else [],
                             "model_recovery": recovery.records if session_log_enabled else [],
-                            "thinking": thinking_meta,
+                            "thinking": (
+                                {
+                                    "kind": "work",
+                                    "status": "complete",
+                                    "content": planning_work[-12000:],
+                                }
+                                if need_team_confirm
+                                else thinking_meta
+                            ),
                             "tool_events": recorded_tools,
                             "subagent_events": subagent_events,
                             "segments": segments,
@@ -4350,7 +4663,9 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             producer = generate_stream()
             try:
                 async with asyncio.timeout(max(0.01, work_budget.remaining)):
-                    async for frame in producer:
+                    from masp.turn_hub import coalesce_text_frames
+
+                    async for frame in coalesce_text_frames(producer):
                         await journal.consume_async(frame)
                         yield frame
             except TimeoutError:
@@ -5282,7 +5597,77 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
     app.mount("/static", StaticFiles(directory=web), name="static")
 
     @app.get("/")
-    def index() -> FileResponse:
-        return FileResponse(web / "chat.html")
+    async def index() -> HTMLResponse:
+        from masp.plugin_surface import surface_host
+
+        html = (web / "chat.html").read_text(encoding="utf-8")
+        installed = [
+            bundle
+            for bundle in service().store.list("dsh_bundle")
+            if bundle.get("enabled") and bundle.get("native_manifest")
+        ]
+        if installed:
+            worker = await asyncio.to_thread(
+                surface_host, service().store, service().home, installed[0]["id"]
+            )
+            result = await worker.request_async("plugin-index", html=html)
+            html = result["html"]
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+    @app.api_route(
+        "/{plugin_path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],
+        include_in_schema=False,
+    )
+    async def plugin_http(plugin_path: str, request: Request) -> Response:
+        import httpx
+
+        from masp.plugin_surface import surface_host
+
+        bundles = [
+            item
+            for item in service().store.list("dsh_bundle")
+            if item.get("enabled") and item.get("native_manifest")
+        ]
+        if not bundles or plugin_path.startswith("static/"):
+            raise HTTPException(404, "Not found")
+        data = await request.body()
+        if len(data) > 25 * 1024 * 1024:
+            raise HTTPException(413, "Plugin request exceeds 25 MB")
+        worker = await asyncio.to_thread(
+            surface_host, service().store, service().home, bundles[0]["id"]
+        )
+        path = "/" + plugin_path + ("?" + request.url.query if request.url.query else "")
+        endpoint = await worker.request_async("plugin-http-endpoint")
+        transport = httpx.AsyncClient(timeout=httpx.Timeout(None, connect=5))
+        try:
+            upstream = await transport.send(
+                transport.build_request(
+                    request.method,
+                    endpoint["url"] + path,
+                    headers=dict(request.headers),
+                    content=data,
+                ),
+                stream=True,
+            )
+        except BaseException:
+            await transport.aclose()
+            raise
+
+        async def relay() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in upstream.aiter_raw():
+                    yield chunk
+            finally:
+                await upstream.aclose()
+                await transport.aclose()
+
+        response = StreamingResponse(relay(), status_code=upstream.status_code)
+        response.raw_headers = [
+            (key, value)
+            for key, value in upstream.headers.raw
+            if key.lower() not in {b"connection", b"transfer-encoding"}
+        ]
+        return response
 
     return app

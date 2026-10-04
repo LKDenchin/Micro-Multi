@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import base64
 import hashlib
@@ -116,6 +117,23 @@ def native_manifest(root: Path) -> dict[str, Any] | None:
     return {"root": str(resolved), "plugins": normalized, "client": dsh.get("client")}
 
 
+class AsyncResponse(queue.Queue[dict[str, Any]]):
+    """Deliver reader-thread replies without occupying a worker-pool thread."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.loop = asyncio.get_running_loop()
+        self.future: asyncio.Future[dict[str, Any]] = self.loop.create_future()
+
+    def put(self, item: dict[str, Any], block: bool = True, timeout: float | None = None) -> None:
+        def deliver() -> None:
+            if not self.future.done():
+                self.future.set_result(item)
+
+        if not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(deliver)
+
+
 class CordisWorker:
     def __init__(self, home: Path, manifest: dict[str, Any], workspace: Path):
         node = os.environ.get("MICRO_MULTI_NODE") or shutil.which("node")
@@ -163,7 +181,13 @@ class CordisWorker:
         env["DSH_HOME"] = str(home.resolve())
         env["ELECTRON_RUN_AS_NODE"] = "1"
         self.process = subprocess.Popen(
-            [node, "--max-old-space-size=256", str(HOST)],
+            [
+                node,
+                "--max-old-space-size=256",
+                "--import",
+                HOST.with_name("framework_guard.mjs").resolve().as_uri(),
+                str(HOST),
+            ],
             cwd=workspace,
             env=env,
             stdin=subprocess.PIPE,
@@ -197,6 +221,7 @@ class CordisWorker:
                 profile = {**profile, "invocationPatchPaths": invocation_paths}
             self.inventory = self.request(
                 "init",
+                timeout=240,
                 root=manifest["root"],
                 plugins=manifest["plugins"],
                 workspace=str(workspace),
@@ -225,7 +250,13 @@ class CordisWorker:
     def _read(self, error_stream: bool) -> None:
         stream = self.process.stderr if error_stream else self.process.stdout
         assert stream is not None
-        while line := stream.readline(524288):
+        while True:
+            try:
+                line = stream.readline(36 * 1024 * 1024 + 1024)
+            except (OSError, ValueError):
+                break
+            if not line:
+                break
             value = line.decode("utf-8", errors="replace").rstrip()
             if not error_stream and value.startswith(PREFIX):
                 try:
@@ -286,7 +317,11 @@ class CordisWorker:
 
     def control(self, action: str, **payload: Any) -> None:
         data = json.dumps({"action": action, **payload}, ensure_ascii=False).encode("utf-8") + b"\n"
-        if len(data) > 500000:
+        if len(data) > (
+            36 * 1024 * 1024
+            if action in {"plugin-http", "plugin-model-stream", "plugin-index"}
+            else 500000
+        ):
             raise ValueError("Cordis request exceeds 500 KB")
         with self.write_lock:
             assert self.process.stdin is not None
@@ -341,6 +376,29 @@ class CordisWorker:
             if bridge:
                 bridge.close()
 
+    async def request_async(
+        self, action: str, timeout: float = 35, **payload: Any
+    ) -> dict[str, Any]:
+        response = AsyncResponse()
+        with self.pending_lock:
+            if self.closing or self.process.poll() is not None:
+                raise RuntimeError("Native Cordis process is not available")
+            if len(self.pending) >= 32:
+                raise RuntimeError("Native Cordis request capacity reached")
+            self.counter += 1
+            identity = self.counter
+            self.pending[identity] = (response, None)
+        try:
+            self.last_used = time.monotonic()
+            await asyncio.to_thread(self.control, action, id=identity, **payload)
+            result = await asyncio.wait_for(response.future, timeout)
+            if result.get("error"):
+                raise ValueError(result["error"])
+            return dict(result["result"])
+        finally:
+            with self.pending_lock:
+                self.pending.pop(identity, None)
+
     def close(self, graceful: bool = True) -> None:
         with self.lock:
             with self.pending_lock:
@@ -379,7 +437,10 @@ class CordisWorker:
                     reader.join(timeout=1)
             for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
                 if stream:
-                    stream.close()
+                    try:
+                        stream.close()
+                    except (OSError, ValueError):
+                        pass
 
 
 def composed_manifest(

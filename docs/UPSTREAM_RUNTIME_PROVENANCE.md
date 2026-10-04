@@ -30,3 +30,10 @@ Harness package repository: https://github.com/deepseek-ai/deepseek-harness. Loc
 Representative license copies are retained in docs/licenses/HARNESS_MIT_LICENSE.txt and docs/licenses/CORDIS_LICENSE.txt. Each installed package remains the authoritative source for its complete notice.
 
 Adapted component sources retain their original licenses and origin records alongside the source files. See NOTICE for redistribution notices. Application orchestration, transport adapters, configuration forms and desktop UI are maintained in this repository.
+
+
+## Native plugin compatibility sources
+
+The original `@deepseek-ai/dsh-settings@0.0.1-rc.3` namespace SettingsProvider is retained unchanged in `src/masp/native/vendor/dsh-settings-namespace/index.mjs`. Its LICENSE and provenance.json record the published archive URL and SHA-256. This isolated service coexists with the current Config settings implementation; the adapter and persistence layer are Micro-Multi code.
+
+Framework snapshots are extracted from published npm archives verified against package-lock.json integrity and checked per source file. The snapshot identity uses framework versions, sources and integrity, rather than unrelated lock-file changes. Host loading and client bundling read this baseline; a plugin's modification of installed SDK sources is not accepted as a new baseline. Complete current versions are recorded in [package.json](../package.json) and [package-lock.json](../package-lock.json).

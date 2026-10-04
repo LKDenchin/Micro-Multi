@@ -1078,9 +1078,72 @@ body.theme-light #workspace-file-actions .select-trigger,body.theme-light #works
 .extension-detail-dialog.has-plugin-surface { width: min(960px, calc(100vw - 64px)); max-height: calc(100vh - 64px); }
 .plugin-surface-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:20px 0; }
 .plugin-surface-toolbar span { font-size:14px; color:var(--muted); }
-.plugin-client-root { --dsw-alias-label-primary: #ececec; --dsw-alias-label-secondary: #aaa; --dsw-alias-label-tertiary: #888; --dsw-alias-bg-layer-1: #242424; --dsw-alias-bg-layer-2: #303030; --dsw-alias-bg-layer-3: #383838; --dsw-alias-border-l1: #383838; --dsw-alias-border-l2: #444; --dsw-alias-brand-primary: #3784f5; --dsw-alias-status-success: #53b98b; --dsw-alias-status-error: #e87878; --dsw-alias-status-warning: #d6a859; min-width:0; font-size:14px; line-height:1.6; }
+.plugin-client-root, .plugin-slot-host { --dsw-alias-label-primary: #ececec; --dsw-alias-label-secondary: #aaa; --dsw-alias-label-tertiary: #888; --dsw-alias-bg-layer-1: #242424; --dsw-alias-bg-layer-2: #303030; --dsw-alias-bg-layer-3: #383838; --dsw-alias-border-l1: #383838; --dsw-alias-border-l2: #444; --dsw-alias-brand-primary: #3784f5; --dsw-alias-status-success: #53b98b; --dsw-alias-status-error: #e87878; --dsw-alias-status-warning: #d6a859; min-width:0; font-size:14px; line-height:1.6; }
 .plugin-client-section { padding:4px 0 16px; }
 .plugin-client-section > h3 { margin:0 0 20px; font-size:18px; }
 .plugin-client-root input:not([type=checkbox]):not([type=radio]), .plugin-client-root select, .plugin-client-root textarea { max-width:100%; }
 .plugin-client-root button { width:auto; min-height:30px; }
-.plugin-client-root { --dsw-alias-border-l2-darkmode-thin: #444; --dsw-alias-fill-tertiary: #333; --dsw-alias-interactive-bg-hover-solid: #383838; --dsw-alias-interactive-bg-hover: #303030; --dsw-alias-label-dimmed: #777; --dsw-alias-state-error-primary: #e87878; --dsw-alias-state-success-primary: #53b98b; --dsw-alias-state-warn-label: #d6a859; --dsw-elevation-prominent: 0 10px 36px #0008; --dsw-specific-menu: #242424; }
+.plugin-client-root, .plugin-slot-host { --dsw-alias-border-l2-darkmode-thin: #444; --dsw-alias-fill-tertiary: #333; --dsw-alias-interactive-bg-hover-solid: #383838; --dsw-alias-interactive-bg-hover: #303030; --dsw-alias-label-dimmed: #777; --dsw-alias-state-error-primary: #e87878; --dsw-alias-state-success-primary: #53b98b; --dsw-alias-state-warn-label: #d6a859; --dsw-elevation-prominent: 0 10px 36px #0008; --dsw-specific-menu: #242424; }
+
+/* Plan documents and long model names share the same responsive surfaces. */
+.plan-document-links{display:flex;flex-wrap:wrap;gap:8px}
+.plan-document-links button{width:auto;padding:7px 12px;border:1px solid #383838;border-radius:8px;background:#242424;color:#ddd;font:inherit;font-size:12px;cursor:pointer}
+.workspace-markdown-preview{padding:20px;overflow-wrap:anywhere;min-width:0}
+.select-option{height:auto!important;white-space:normal!important;overflow-wrap:anywhere!important;flex-shrink:0!important;min-width:0!important}
+.select-trigger-label{flex:1;max-width:100%}.select-trigger svg{flex:none}
+.custom-select-host{min-width:0}.composer-right{min-width:0}.composer-right .model-select{max-width:min(190px,30vw);flex:0 1 190px}.composer-right .model-select .select-trigger{min-width:0;width:100%}
+body.theme-light .customization-page{border-color:transparent;box-shadow:none}
+body.theme-light .customization-nav-head button,body.theme-light .customization-content button:not(.extension-switch),body.theme-light .settings-embedded-list button:not(.extension-switch),body.theme-light .model-card button,body.theme-light .context-menu button{background:#f3f3f3;color:#222;border-color:#ddd}
+body.theme-light .customization-nav button:hover:not(.selected){background:#eee}
+body.theme-light .select-popover,body.theme-light .context-menu{background:#fff;color:#222;border-color:#ddd;box-shadow:0 8px 28px #0002}
+body.theme-light .select-option{color:#222!important;background:transparent!important}
+body.theme-light .select-option:hover,body.theme-light .select-option[aria-selected=true]{background:#eee!important;color:#111!important}
+body.theme-light .plan-approval-card,body.theme-light .execution-plan-card{background:#fafafa;color:#222;border-color:#e5e5e5}
+body.theme-light .plan-agent-item{background:#fff;border-color:#e8e8e8}
+body.theme-light .plan-approval-title,body.theme-light .plan-agent-badge,body.theme-light .execution-plan-title{color:#222}
+body.theme-light .plan-agent-resp,body.theme-light .plan-step-desc{color:#666}
+body.theme-light .plan-agent-paths,body.theme-light .plan-approval-icon,body.theme-light .plan-risk-tag,body.theme-light .plan-status-pill.is-pending,body.theme-light .plan-document-links button,body.theme-light .plan-btn{background:#f1f1f1;color:#333;border-color:#ddd}
+body.theme-light .plan-btn.primary{background:#222;color:#fff;border-color:#222}
+body.theme-light .dsh-plugin-badge{background:#eee;color:#555;border-color:#ddd}
+body.theme-light .plugin-client-root,body.theme-light .plugin-slot-host{--dsw-alias-label-primary:#222;--dsw-alias-label-secondary:#666;--dsw-alias-label-tertiary:#888;--dsw-alias-bg-layer-1:#fff;--dsw-alias-bg-layer-2:#f5f5f5;--dsw-alias-bg-layer-3:#eee;--dsw-alias-border-l1:#e5e5e5;--dsw-alias-border-l2:#ddd;--dsw-alias-border-l2-darkmode-thin:#ddd;--dsw-alias-fill-tertiary:#eee;--dsw-alias-interactive-bg-hover-solid:#eee;--dsw-alias-interactive-bg-hover:#f5f5f5;--dsw-specific-menu:#fff;--dsw-elevation-prominent:0 10px 36px #0002;color:#222;color-scheme:light}
+
+#plugin-shell-bottom{position:fixed;bottom:0;left:0;right:0;z-index:20} #plugin-shell-leading{position:fixed;top:0;left:0;z-index:20}
+
+#plugin-input-overlay{position:absolute;inset:0;pointer-events:none}#plugin-input-overlay>*{pointer-events:auto}
+
+/* Plugin onboarding may cover its card, but must not capture the entire shell. */
+.plugin-body-portals{pointer-events:none}
+.plugin-body-portals>*{pointer-events:auto}
+.plugin-body-portals>[aria-modal="true"]{pointer-events:none}
+.plugin-body-portals>[aria-modal="true"]>*{pointer-events:auto}
+
+/* Reserve fixed actions; let model names and plugin controls share the rest. */
+#composer{container-type:inline-size;container-name:composer}
+.composer-bottom{flex-wrap:nowrap;gap:clamp(4px,1cqi,10px)}
+.composer-left,.composer-right{flex-wrap:nowrap;gap:clamp(3px,.8cqi,8px)}
+.composer-left{flex:0 0 auto}
+.composer-right{flex:1 1 0;justify-content:flex-end}
+.composer-bottom .plugin-slot-host:empty{display:none}
+.composer-bottom>.composer-left>.plugin-slot-host,.composer-right>.plugin-slot-host{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:min(200px,35cqi);flex:0 1 auto;white-space:nowrap}
+.composer-bottom .plugin-slot-host>*{min-width:0;max-width:100%}
+.composer-bottom .plugin-slot-host select,.composer-bottom .plugin-slot-host button{min-width:0;max-width:100%;white-space:nowrap}
+.composer-bottom .plugin-slot-host button{overflow:hidden;text-overflow:ellipsis}
+.composer-bottom .permission-select,.composer-bottom #composer-project,.composer-bottom #send,.composer-bottom .context-usage-widget{flex-shrink:0}
+.composer-bottom #access-trigger,.composer-bottom .context-usage-trigger{white-space:nowrap}
+.composer-bottom #access-trigger svg,.composer-bottom .context-ring-icon{flex-shrink:0}
+.composer-right .model-select{flex:1 1 190px;min-width:48px;max-width:190px}
+.composer-right .agent-select{flex:0 1 112px;min-width:42px}
+.composer-right .composer-select .select-trigger{min-width:0;width:100%;gap:4px;padding-inline:6px;white-space:nowrap}
+@container composer (max-width:620px){
+ #access-label{display:none}
+ .permission-select>#access-trigger{gap:4px;padding-inline:4px}
+ .composer-right .model-select{max-width:none}
+ .composer-bottom .context-usage-trigger{gap:4px;padding-inline:6px}
+}
+@container composer (max-width:440px){
+ #context-usage-label{display:none}
+ .composer-right .agent-select{flex:0 0 26px;min-width:26px}
+ .composer-right .agent-select .select-trigger-label{display:none}
+ .composer-right .agent-select .select-trigger{justify-content:center;padding-inline:3px}
+ .composer-bottom>.composer-left>.plugin-slot-host,.composer-right>.plugin-slot-host{max-width:28cqi}
+}
