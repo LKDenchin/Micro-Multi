@@ -96,6 +96,8 @@ Windows Python 来自 python.org 嵌入版。Linux 使用 `20261001` 发布的�
 
 ## 验证与发布
 
+官网下载链接在构建时自动读取 GitHub 最新正式 Release，使用其中实际上传的安装包文件名和 SHA256 校验文件。发布新版并上传附件后，在 Actions 重新运行 **Documentation site**，中英文页面就会同步；无需修改版本号或文件名。草稿和预发布版不参与。缺少某个平台安装包或校验文件时，页面会指向最新 Release，不会下载旧版或不存在的文件。
+
 冒烟脚本用空临时数据启动实际安装包，不继承模型配置；检查包内 Node 依赖及 peer 闭包、后端健康、内置 MCP、空列表、真实渲染与桥、凭据读写删除、审查程序和原生 dsh。AppImage 检查实际解压资源。临时本机 DevTools 端口与后台渲染开关仅用于检查，结束后清理测试进程及数据。见[验证记录](RELEASE_VALIDATION.zh-CN.md)。
 
 提交前执行 `python scripts/publication_audit.py`。安装包和 `SHA256SUMS.txt` 属于 Release 附件，不纳入源码。

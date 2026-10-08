@@ -97,6 +97,8 @@ Installed data defaults to `%APPDATA%\Micro-Multi\data` on Windows and `${XDG_CO
 
 ## Validation and publication
 
+The website's download links are generated from the latest published GitHub Release, including its installer filenames and SHA256 checksum file. After publishing a release and uploading its files, rerun **Documentation site** in Actions to refresh both languages. No version or filename edits are needed. Drafts and prereleases are excluded. If a platform's installer or checksum file is missing, the page links to the latest release instead of an old or nonexistent file.
+
 The smoke script starts the actual packaged executable with empty temporary data and no inherited model settings. It checks the required Node dependency and peer closure inside the package, backend health, built-in MCP, empty lists, the real renderer and desktop bridge, credential read/write/delete, review binary and native dsh Cordis. AppImage checks locate the running single file's actual extracted resources. A temporary loopback DevTools port and background-rendering test switches are enabled for this check only; test processes and data are cleaned afterward. See [release validation](RELEASE_VALIDATION.md).
 
 Run `python scripts/publication_audit.py` before committing. Installation packages and `SHA256SUMS.txt` belong in Release assets, not source files.
