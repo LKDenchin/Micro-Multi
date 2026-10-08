@@ -5,6 +5,15 @@ import './native-form.js';
 import { renderAttachmentCards } from './attachment-preview.js?v=44';
 
 const $ = (selector) => document.querySelector(selector);
+// Native clients may set document.title on mount and on cleanup.
+// Restore only when changed so the observer settles after its own update.
+const restoreApplicationTitle = () => {
+  if (document.title !== 'Micro-Multi') document.title = 'Micro-Multi';
+};
+restoreApplicationTitle();
+new MutationObserver(restoreApplicationTitle).observe(document.head, {
+  childList: true, subtree: true, characterData: true,
+});
 installIcons();
 installLocaleObserver();
 const thread = $('#thread');
@@ -729,10 +738,13 @@ function renderMessage(role, content, extra = '', toolEvents = [], options = {})
   const turn = item.querySelector('.assistant-turn');
   for (const segment of options.segments || []) {
     if (segment.type === 'team_plan') {
-      const card = createOrUpdatePlanApprovalCard(null, segment.team);
+      const currentRevision = team && Number(segment.team.version) === Number(team.version);
+      const card = createOrUpdatePlanApprovalCard(null, currentRevision ? team : segment.team);
       if (card) {
-        card.dataset.teamVersion = String(segment.team.version);
-        if (team && segment.team.version !== team.version) card.querySelector('[data-inline-approve-plan]')?.setAttribute('disabled', '');
+        if (team && !currentRevision) {
+          const approve = card.querySelector('[data-inline-approve-plan]');
+          if (approve) approve.textContent = '查看最新方案';
+        }
         turn.append(card);
       }
     }
@@ -2623,12 +2635,42 @@ let suppressAbortBanner = false;
 let activeTurnSequence = 0;
 let activeTurnStartedAt = 0;
 
-async function confirmAndStartTeamExecution() {
-  const versionBeforeEdit = team?.version;
+let teamExecutionConfirmation = null;
+function confirmAndStartTeamExecution(expectedVersion = null, card = null) {
+  if (teamExecutionConfirmation) return teamExecutionConfirmation;
+  teamExecutionConfirmation = approveAndStartTeamExecution(expectedVersion, card)
+    .finally(() => { teamExecutionConfirmation = null; });
+  return teamExecutionConfirmation;
+}
+
+async function approveAndStartTeamExecution(expectedVersion, card) {
+  let versionBeforeEdit = team?.version;
   const projectId = currentProjectId();
   if (!projectId) throw new Error('请先选择或创建项目');
   if (!conversationId) {
     await createConversation(projectId);
+  }
+  const approvalConversation = conversationId;
+  // A plan card arrives before the producer finishes persisting the turn. Wait
+  // for that barrier rather than aborting the transport and racing its cleanup.
+  const readyDeadline = Date.now() + 15000;
+  while ((await api('/conversations/' + encodeURIComponent(approvalConversation) + '/live')).active) {
+    if (Date.now() >= readyDeadline) throw new Error('方案正在保存，请稍后再次确认。');
+    await new Promise(resolve => setTimeout(resolve, 150));
+  }
+  if (conversationId !== approvalConversation) throw new Error('当前对话已切换，请在原对话中确认方案。');
+  if (expectedVersion !== null) {
+    const latest = await api('/projects/' + encodeURIComponent(projectId) + '/team?conversation_id=' + encodeURIComponent(conversationId));
+    if (Number(latest.version) !== expectedVersion) {
+      team = latest;
+      renderTeam();
+      createOrUpdatePlanApprovalCard(card, latest);
+      toast('方案已更新，已在此处显示最新分工。请审核后再次确认。');
+      return team;
+    }
+    if (!teamDirty) team = latest;
+    versionBeforeEdit = latest.version;
+    if (latest.approval_consumed) throw new Error('此方案已开始执行，请查看当前进度。');
   }
   if ($('#team-review-dialog')?.open && !$('#team-review-editor').hidden) {
     syncModalEditorToTeam();
@@ -2657,12 +2699,7 @@ async function confirmAndStartTeamExecution() {
   renderWorkflowMindmap(team);
   setFeedback('#team-feedback', '子 Agent 团队已确认并启动并行执行。');
   toast('已确认子 Agent 分工，开始执行');
-  if (busy && activeChatAbortController) {
-    suppressAbortBanner = true;
-    activeChatAbortController.abort();
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    busy = false;
-  }
+  if (busy && activeChatAbortController) detachLiveTransport();
   await send('已确认子 Agent 分工，立即并行执行', [], { executeTeamNow: true });
   return team;
 }
@@ -2909,13 +2946,13 @@ async function mountConversationPlugins(epoch){
     const item=wanted.get(id);
     if(!item||entry.key!==conversationId+'|'+item.updated_at){await entry.dispose();entry.root.remove();entry.style.remove();conversationPluginMounts.delete(id);}
   }
-  for(const [id,item] of wanted){
+  const pending = [...wanted].filter(([id]) => !conversationPluginMounts.has(id));
+  const mountOne = async ([id,item]) => {
     if(epoch!==conversationPluginEpoch)return;
-    if(conversationPluginMounts.has(id))continue;
     let root,style,dispose;
     try{
-      const surface=await api('/dsh/plugins/'+encodeURIComponent(id)+'/surface');
-      if(!surface.available||epoch!==conversationPluginEpoch)continue;
+      const surface=await api('/dsh/plugins/'+encodeURIComponent(id)+'/surface?conversation_only=true');
+      if(!surface.available||epoch!==conversationPluginEpoch)return;
       const client=await importPluginClient(id,surface.client_revision||item.updated_at);
       if(epoch!==conversationPluginEpoch)return;
       root=document.createElement('div');$('#plugin-runtime-roots').append(root);
@@ -2925,7 +2962,15 @@ async function mountConversationPlugins(epoch){
       if(epoch!==conversationPluginEpoch){await dispose();root.remove();style.remove();return;}
       conversationPluginMounts.set(id,{dispose,root,style,key:conversationId+'|'+item.updated_at});
     }catch(error){await dispose?.();root?.remove();style?.remove();console.error('插件前端加载失败',item.name,error);}
-  }
+  };
+  // Bound client builds/imports without making every plugin wait for the slowest one.
+  const queue = pending.values();
+  await Promise.all(Array.from({length: Math.min(3, pending.length)}, async () => {
+    for (const item of queue) {
+      if (epoch !== conversationPluginEpoch) return;
+      await mountOne(item);
+    }
+  }));
 }
 
 async function loadPlugins() {
@@ -3658,7 +3703,7 @@ async function send(content, attachments = [], options = {}) {
         if (part.includes('event: team')) {
           team = parsed;
           renderTeam();
-          if (parsed.status === 'draft' && parsed.agents?.length) {
+          if (parsed.status === 'draft' && parsed.agents?.length && parsed.pending_tasks?.length) {
             activePlanCardEl = createOrUpdatePlanApprovalCard(activePlanCardEl, parsed);
             if (activePlanCardEl && !activePlanCardEl.parentElement && turnContainer) turnContainer.insertBefore(activePlanCardEl, currentBubble);
           }
@@ -4208,10 +4253,10 @@ $('#forward')?.addEventListener('click', async () => {
 thread.addEventListener('click', async (event) => {
   const approvePlanBtn = event.target.closest('[data-inline-approve-plan]');
   if (approvePlanBtn) {
-    const cardVersion = Number(approvePlanBtn.closest('.plan-approval-card')?.dataset.teamVersion);
-    if (cardVersion !== Number(team?.version)) return toast('此方案已被新版替代，请审核最新团队方案。', true);
+    const card = approvePlanBtn.closest('.plan-approval-card');
+    const cardVersion = Number(card?.dataset.teamVersion);
     try {
-      await confirmAndStartTeamExecution();
+      await confirmAndStartTeamExecution(cardVersion, card);
     } catch (error) {
       toast(error.message, true);
     }
@@ -5541,8 +5586,6 @@ async function initialize() {
       api('/projects'), api('/model-profiles'), api('/conversations'),
     ]);
     renderSelectors();
-    await loadMcpServers();
-    await loadPlugins();
     const recoveringRenderer = new URLSearchParams(location.search).get("recover") === "renderer";
     const shouldRestore = recoveringRenderer || Boolean(dshSettings?.general?.restoreLastSession);
     const interruptedConv = conversations.find((c) => ['interrupted', 'running'].includes(c.execution_status));
@@ -5553,6 +5596,8 @@ async function initialize() {
     } else {
       await startNewChat(null);
     }
+    // Restore the usable chat before optional plugin discovery and client builds.
+    void Promise.allSettled([loadMcpServers(), loadPlugins()]);
   } catch (error) { renderMessage('assistant', '工作空间加载失败：' + error.message); }
 }
 initialize();

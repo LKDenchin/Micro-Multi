@@ -213,6 +213,11 @@ async function createWindow(recovering = false) {
     },
   });
   mainWindow = window;
+  // Native plugin clients share the document, but the host owns the window title.
+  window.on('page-title-updated', (event) => {
+    event.preventDefault();
+    if (window.getTitle() !== 'Micro-Multi') window.setTitle('Micro-Multi');
+  });
   window.setMenuBarVisibility(false);
   window.webContents.on('render-process-gone', (_event, detail) => {
     logDesktop('render-process-gone', {...detail, build:EXPECTED_BUILD_ID,

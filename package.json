@@ -3,7 +3,7 @@
   "main": "desktop/main.cjs",
   "private": true,
   "version": "0.1.0",
-  "description": "Local multi-agent desktop workspace compatible with the deepseek-harness (dsh) plugin ecosystem",
+  "description": "Multi-agent collaboration workspace with task dependencies, file coordination and DeepSeek Harness plugin compatibility",
   "dependencies": {
     "@alibaba-group/open-code-review": "1.12.10",
     "@deepseek-ai/cordis": "4.0.4",
@@ -114,7 +114,7 @@
     "desktop:pack": "npm run desktop:prepare && electron-builder --win --x64 --dir --publish never",
     "desktop:dist": "npm run desktop:prepare && electron-builder --win --x64 --publish never",
     "desktop:dist:linux": "python3 scripts/prepare_desktop.py && electron-builder --linux deb AppImage --x64 --publish never",
-    "test:chat-startup": "node tests/chat_startup.test.mjs"
+    "test:chat-startup": "node tests/chat_startup.test.mjs && node tests/chat_approval_startup.test.mjs"
   },
   "productName": "Micro-Multi",
   "license": "Apache-2.0",

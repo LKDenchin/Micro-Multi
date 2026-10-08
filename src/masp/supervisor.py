@@ -736,7 +736,9 @@ class SupervisorManager:
             "first_turn_confirm": False,
             "agents": [s.to_team_agent_dict() for s in self.subagents.values()],
             "version": int(self.team_obj.get("version") or 1),
-            "plan_version": int(self.team_obj.get("plan_version") or 1),
+            "plan_version": int(
+                self.team_obj.get("plan_version") or self.team_obj.get("version") or 1
+            ),
             "updated_at": now(),
         }
 

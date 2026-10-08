@@ -1,5 +1,7 @@
 # Architecture and technology
 
+The core is multi-agent scheduling and DeepSeek Harness plugin integration. Models propose assignments; the Python scheduler validates plans, handles task dependencies and path locks, and returns reports to the lead. The native Node host supplies Cordis services and dsh plugin tools. Tools and events connect these layers. See [Agent design](AGENT_DESIGN.md) for tradeoffs and the pi analysis.
+
 Micro-Multi combines an Electron desktop shell, a local Python service and Node.js agent/plugin runtimes. The main workspace is written in HTML, CSS and JavaScript. Native plugin components use React, so plugins can contribute controls without replacing the workspace.
 
 ## How a task runs

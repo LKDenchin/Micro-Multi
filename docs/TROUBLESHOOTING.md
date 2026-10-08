@@ -1,5 +1,15 @@
 # Troubleshooting
 
+## A plan cannot start
+
+Confirm the current plan in the chat card. If the plan changed, the card shows the latest assignments in place; review them and confirm again. You do not need to switch to the collaboration map. If the planning turn is still saving, wait for it to finish. A revision that already started cannot be approved again; send feedback to prepare a new plan.
+
+## Startup with many plugins
+
+The chat restores before optional plugin clients load, with up to three concurrent client operations. The first load may need a build; later loads use the source revision cache. A conversation probe does not boot a Host for a package without a client. Opening details or using its functions still loads the required services.
+
+For a plugin that remains unavailable, inspect its dependency and startup diagnostics. Usable chat and fully loaded plugin clients are separate milestones. Native service activation still depends on the plugin's dependencies and initialization work.
+
 Start with the message shown by the app and the tool record for the failed operation. Note which action failed before changing several settings at once.
 
 ## A model will not connect

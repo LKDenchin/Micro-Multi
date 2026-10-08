@@ -13,6 +13,7 @@ import subprocess
 import threading
 import uuid
 from collections.abc import AsyncGenerator
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from masp.native_process import native_creation_flags
 from masp.storage import Store
 
 _lock = threading.RLock()
-_build_lock = threading.RLock()
+_build_locks: dict[str, threading.Lock] = {}
 _hosts: dict[tuple[str, str], CordisWorker] = {}
 NATIVE = Path(__file__).parent / "native"
 
@@ -37,26 +38,42 @@ def surface_bundle(store: Store, plugin_id: str) -> dict[str, Any]:
     return bundle
 
 
-def runtime_revision() -> str:
+@lru_cache(maxsize=8)
+def _runtime_revision(snapshot: tuple[tuple[str, int, int], ...]) -> str:
     digest = hashlib.sha256()
-    for file in sorted(NATIVE.rglob("*.mjs")):
+    for path, _, _ in snapshot:
+        file = Path(path)
         digest.update(str(file.relative_to(NATIVE)).encode())
         digest.update(file.read_bytes())
     return digest.hexdigest()[:24]
 
 
-def surface_info(store: Store, plugin_id: str, home: Path | None = None) -> dict[str, Any]:
+def runtime_revision() -> str:
+    return _runtime_revision(
+        tuple(
+            (str(file), stat.st_mtime_ns, stat.st_size)
+            for file in sorted(NATIVE.rglob("*.mjs"))
+            for stat in [file.stat()]
+        )
+    )
+
+
+def surface_info(
+    store: Store, plugin_id: str, home: Path | None = None, *, conversation_only: bool = False
+) -> dict[str, Any]:
     bundle = surface_bundle(store, plugin_id)
     client = bundle["native_manifest"].get("client")
     capabilities = (
         surface_host(store, home, plugin_id).request("plugin-capabilities", pluginId=plugin_id)
-        if home
+        if home and (client or not conversation_only)
         else {}
     )
     return {
         "available": bool(client),
         "client": client,
-        "client_revision": client_revision(Path(bundle["native_manifest"]["root"])),
+        "client_revision": client_revision(Path(bundle["native_manifest"]["root"]))
+        if client
+        else None,
         "name": bundle["name"],
         "provides_models": bool(capabilities.get("providesModels")),
         "settings_namespaces": capabilities.get("settingsNamespaces", []),
@@ -179,7 +196,9 @@ def client_asset(store: Store, home: Path, plugin_id: str, asset: str) -> Path:
         raise ValueError("此插件没有浏览器界面")
     root = Path(manifest["root"]).resolve()
     output = home / "plugin-client-cache" / client_revision(root)
-    with _build_lock:
+    with _lock:
+        build_lock = _build_locks.setdefault(str(output.resolve()), threading.Lock())
+    with build_lock:
         if not (output / "client.js").is_file():
             node = os.environ.get("MICRO_MULTI_NODE") or shutil.which("node")
             if not node:

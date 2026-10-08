@@ -2,6 +2,8 @@
 
 Micro-Multi 由 Electron 桌面外壳、本地 Python 服务，以及 Node.js 智能体/插件运行时组成。主工作区使用 HTML、CSS 和 JavaScript 编写；原生插件组件使用 React，可在主界面中增加控件。
 
+核心是多 Agent 调度与 DeepSeek Harness 插件集成。模型提出分工，Python 调度器校验方案、处理任务依赖与路径锁，主 Agent 汇总成员报告；Node 原生宿主提供 Cordis 服务和 dsh 插件工具。两层通过工具和事件接口协作。设计取舍与 pi 的参考分析见[Agent 设计](AGENT_DESIGN.zh-CN.md)。
+
 ## 任务怎样执行
 
 Electron 启动 Python 服务，并在沙箱渲染进程中打开工作区。preload 桥提供选取目录等有限的桌面操作。Web 界面向 FastAPI 发送请求，后端管理项目、对话、模型和任务执行。

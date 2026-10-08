@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — source update 2026-10-08
+
+- Restore chat before plugin discovery; load up to three clients concurrently, lock builds per cache revision and reuse native source digests.
+- Skip Host initialization for conversation probes of packages without clients; retain model and settings discovery in details.
+- Wait for plan persistence and check the server revision before confirmation. Update stale cards in place, coalesce confirmations and reject consumed approvals.
+- Tell the lead that approved members are already scheduled; display the actual plan revision.
+- Keep the Micro-Multi window and page title when native clients update document titles.
+- Rewrite English/Chinese docs and GitHub Pages around multi-agent collaboration and DeepSeek Harness compatibility, with execution comparisons and pi design analysis.
+
+The package version remains 0.1.0. This updates source and Pages, not desktop installers.
+
 ## Unreleased — source update 2026-10-05
 
 - Native Cordis Loader and ClientModuleSystem composition, recursive service and declared library resolution, and package-local build dependencies.

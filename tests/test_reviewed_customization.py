@@ -205,6 +205,146 @@ def test_generated_plan_cannot_choose_another_child_model(tmp_path):
     assert manager.subagents["worker"].model_profile_id is None
 
 
+def test_approved_execution_keeps_revision_and_dependencies_and_rejects_replay(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr("masp.model_settings.keyring.get_password", lambda *args: None)
+    finished = []
+    system_prompts = []
+
+    async def execute(self, name, prompt, criteria=None, **kwargs):
+        if name == "animate":
+            assert "draw" in finished
+        finished.append(name)
+        return {"status": "completed", "subagent_name": name, "summary": "done"}
+
+    def stream(self, *args, **kwargs):
+        system_prompts.extend(
+            message["content"]
+            for message in kwargs["json"]["messages"]
+            if message["role"] == "system"
+        )
+        if any(
+            "本轮必须重新提交协作方案" in message["content"]
+            for message in kwargs["json"]["messages"]
+            if message["role"] == "system"
+        ):
+            return Response(
+                {
+                    "tool_calls": [
+                        call(
+                            "start_subagents",
+                            {
+                                "tasks": [
+                                    {
+                                        "subagent_name": "followup",
+                                        "prompt": "Update followup",
+                                        "owned_paths": ["followup.py"],
+                                    }
+                                ]
+                            },
+                        )
+                    ]
+                }
+            )
+        return Response({"content": "完成集成。"})
+
+    async def no_title(*args, **kwargs):
+        raise RuntimeError("no title endpoint")
+
+    monkeypatch.setattr(SupervisorManager, "_execute_subagent_task", execute)
+    monkeypatch.setattr("httpx.AsyncClient.stream", stream)
+    monkeypatch.setattr("httpx.AsyncClient.post", no_title)
+    with TestClient(create_app(tmp_path / "home")) as client:
+        profile = client.post(
+            "/api/model-profiles",
+            json={"name": "Test", "model": "test", "base_url": "http://127.0.0.1:9999/v1"},
+        ).json()
+        project = client.post("/api/projects", json={"name": "Bike"}).json()
+        conv = client.post(
+            "/api/conversations",
+            json={"project_id": project["id"], "model_profile_id": profile["id"]},
+        ).json()
+        store = client.app.state.service.store
+        team = {
+            "version": 7,
+            "status": "draft",
+            "requirement": "鹈鹕骑自行车",
+            "main_profile_id": profile["id"],
+            "agents": [
+                {
+                    "id": "draw",
+                    "name": "Draw",
+                    "responsibility": "Draw SVG",
+                    "model_profile_id": "",
+                    "owned_paths": ["bike.html"],
+                },
+                {
+                    "id": "animate",
+                    "name": "Animate",
+                    "responsibility": "Animate SVG",
+                    "model_profile_id": "",
+                    "owned_paths": ["bike.html"],
+                },
+            ],
+            "pending_tasks": [
+                {"subagent_name": "draw", "prompt": "Draw SVG", "owned_paths": ["bike.html"]},
+                {
+                    "subagent_name": "animate",
+                    "prompt": "Animate SVG",
+                    "owned_paths": ["bike.html"],
+                    "depends_on": ["draw"],
+                },
+            ],
+        }
+        team.update(id=project["id"], project_id=project["id"], conversation_id=conv["id"])
+        store.update("conversation", conv["id"], team=team)
+        endpoint = "/api/projects/" + project["id"] + "/team/approve"
+        assert (
+            client.post(endpoint, json={"conversation_id": conv["id"], "version": 6}).status_code
+            == 409
+        )
+        assert (
+            client.post(endpoint, json={"conversation_id": conv["id"], "version": 7}).status_code
+            == 200
+        )
+        message_url = "/api/conversations/" + conv["id"] + "/messages"
+        body = {
+            "content": "已确认子 Agent 分工，立即并行执行",
+            "review_team_plan": True,
+            "execute_team_now": True,
+            "team_version": 7,
+        }
+        response = client.post(message_url, json={**body, "team_version": 6})
+        assert response.status_code == 409 and not finished
+        response = client.post(message_url, json=body)
+        assert response.status_code == 200, response.text
+        assert "awaiting_approval" not in response.text
+        assert finished == ["draw", "animate"]
+        assert any("成员已由调度器启动" in prompt for prompt in system_prompts)
+        assert not any("旧团队仅供分工参考" in prompt for prompt in system_prompts)
+        saved = store.get("conversation", conv["id"])["team"]
+        assert saved["version"] == 7 and saved["approval_consumed"]
+        assert (
+            client.post(endpoint, json={"conversation_id": conv["id"], "version": 7}).status_code
+            == 409
+        )
+        assert client.post(message_url, json=body).status_code == 409
+        assert finished == ["draw", "animate"]
+        response = client.post(
+            message_url, json={"content": "增加下一轮修改", "review_team_plan": True}
+        )
+        assert response.status_code == 200 and "awaiting_approval" in response.text
+        next_team = store.get("conversation", conv["id"])["team"]
+        assert next_team["version"] == 8 and next_team["plan_version"] == 8
+        assert next_team["approval_consumed"] is False
+        assert [task["subagent_name"] for task in next_team["pending_tasks"]] == ["followup"]
+        assert (
+            client.post(endpoint, json={"conversation_id": conv["id"], "version": 8}).status_code
+            == 200
+        )
+
+
 def test_repeated_dispatch_shares_running_and_completed_execution(tmp_path, monkeypatch):
     async def verify():
         manager = SupervisorManager(tmp_path, "deduplicate")

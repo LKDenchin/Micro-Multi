@@ -1,4 +1,19 @@
-# Current source changes — 2026-10-05
+# Current source changes — 2026-10-08
+
+This update fixes startup waiting with many plugins and plan confirmation in chat. Documentation and the website now lead with multi-agent collaboration and DeepSeek Harness plugin compatibility.
+
+- Restore chat before plugin discovery; load up to three clients concurrently and lock client builds per revision.
+- Skip Host startup for conversation probes without a client; retain models and settings discovery in details, and native dsh service dependencies and lifecycles.
+- Wait for plan persistence, then check the server revision. Update old cards in place, coalesce confirmations and reject reapproval or execution of consumed revisions.
+- Tell the lead that approved members are already scheduled instead of treating confirmation as another planning request.
+- Display the execution revision and add bilingual collaboration comparisons and [Agent design and tradeoffs](AGENT_DESIGN.md).
+- Keep window and page titles owned by the host so native client title effects cannot replace Micro-Multi.
+
+Tests use APIs, runtime state and DOM assertions, without simulated clicks. The package version remains 0.1.0; desktop installers were not rebuilt.
+
+Validation for this update: 302 Python tests passed and one platform test skipped. Node startup, approval and plugin regression suites passed; title checks cover restoration after client title changes and observer stability.
+
+## Previous source update — 2026-10-05
 
 This update follows the published 0.1.0 desktop baseline. The package version remains 0.1.0. It updates source and documentation; it does not publish a new Release or replace existing installers.
 

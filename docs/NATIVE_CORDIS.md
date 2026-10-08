@@ -1,5 +1,9 @@
 # Native dsh plugins
 
+Multi-agent teams use the same enabled plugin tools as the lead, with their own model configuration and current permissions. Native Cordis manages service injection, dependency resolution, settings forms and client lifecycles. Compatibility depends on declared entries, dependencies and required services; not every third-party package has been verified.
+
+Startup restores the workspace before loading plugin clients concurrently. Conversation probes skip Host initialization for packages without a client. The details view still discovers those packages' models and settings. Client builds are cached by source revision; one revision avoids duplicate builds, while different revisions can build concurrently.
+
 Micro-Multi supports packages from the deepseek-harness (dsh) ecosystem. A plugin can provide tools to agents, register a model provider or add controls to the app. Client contributions are displayed inside Micro-Multi; you do not need to run a separate dsh WebUI.
 
 ## Install and configure a plugin

@@ -10,6 +10,20 @@ for(const locale of ['zh-CN','en-US']){
  try{
   w.eval(bundle);
   await new Promise(resolve=>setTimeout(resolve,100));
+  // Native client mount/cleanup effects must not take ownership of the host title.
+  let titleMutations=0;
+  const titleObserver=new w.MutationObserver(records=>{titleMutations+=records.length;});
+  titleObserver.observe(w.document.head,{childList:true,subtree:true,characterData:true});
+  w.document.title='DeepSeek Harness';
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(w.document.title,'Micro-Multi');
+  w.document.querySelector('title').textContent='Conversation — DeepSeek Harness';
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(w.document.title,'Micro-Multi');
+  const settledTitleMutations=titleMutations;
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(titleMutations,settledTitleMutations);
+  titleObserver.disconnect();
   const pluginSelect=w.document.createElement('select');pluginSelect.innerHTML='<option value="medium">默认强度</option>';
   w.document.querySelector('#plugin-model-options').append(pluginSelect);
   await new Promise(resolve=>setTimeout(resolve,100));

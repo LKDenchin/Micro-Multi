@@ -29,6 +29,7 @@ GUIDE_PAIRS = {
     "docs/replay.md": ("Conversation history", "对话记录"),
     "docs/TROUBLESHOOTING.md": ("Troubleshooting", "常见问题"),
     "docs/architecture.md": ("Architecture and technology", "架构与技术栈"),
+    "docs/AGENT_DESIGN.md": ("Agent design and tradeoffs", "Agent 设计与取舍"),
     "docs/deployment.md": ("Run from source", "源码部署"),
     "docs/DESKTOP_RELEASE.md": ("Desktop installation and builds", "桌面安装与构建"),
     "docs/contracts.md": ("Runtime interfaces", "运行时接口"),
@@ -58,6 +59,7 @@ GUIDE_SECTIONS = [
         ("Development", "开发与部署"),
         [
             "docs/architecture.md",
+            "docs/AGENT_DESIGN.md",
             "docs/deployment.md",
             "docs/DESKTOP_RELEASE.md",
             "docs/contracts.md",
@@ -111,7 +113,7 @@ def page(
 <a class="brand" href="{home}"><img src="{BASE}assets/micro-multi.svg" width="34" height="34" alt=""><span>Micro-Multi</span></a>
 <div class="navlinks"><a href="{docs}">{"文档" if chinese else "Docs"}</a><a href="{REPO}/releases/latest">{"下载" if chinese else "Download"}</a><a href="{REPO}">GitHub ↗</a><a class="language" href="{alternate}">{"English" if chinese else "简体中文"}</a></div>
 </nav></header><main id="content">{body}</main>
-<footer class="footer"><a class="brand" href="{home}">Micro-Multi</a><p>{"在本地项目中使用 AI 智能体。" if chinese else "AI agents for your local projects."}</p>
+<footer class="footer"><a class="brand" href="{home}">Micro-Multi</a><p>{"多 Agent 协作工作区，兼容 DeepSeek Harness 插件。" if chinese else "A multi-agent workspace compatible with DeepSeek Harness plugins."}</p>
 <div><a href="{doc_url(localized_source("CONTRIBUTING.md", chinese))}">{"参与贡献" if chinese else "Contribute"}</a><a href="{doc_url(localized_source("SECURITY.md", chinese))}">{"安全" if chinese else "Security"}</a><a href="{REPO}/discussions">{"社区" if chinese else "Community"}</a><a href="{REPO}/blob/main/LICENSE">Apache-2.0</a></div><small>© 2026 LKDenchin · {"Micro-Multi 贡献者" if chinese else "Micro-Multi contributors"}</small></footer></body></html>'''
 
 
@@ -124,31 +126,31 @@ def landing(chinese: bool) -> str:
 
     features = [
         (
-            t("Read and edit a project", "阅读和修改项目"),
+            t("Split work by responsibility", "按职责拆分任务"),
             t(
-                "Open a local folder, ask about the code and make changes. Browse files and inspect the Git diff in the same app.",
-                "打开本地目录，让智能体解释代码或修改文件，再在应用中浏览内容、查看 Git 差异。",
+                "The lead proposes assignments for implementation, tests and docs. Review the members, their files and models before execution.",
+                "主 Agent 提出实现、测试、文档等分工。启动前检查每位成员的任务、负责文件和模型。",
             ),
         ),
         (
-            t("Run commands and tests", "运行命令和测试"),
+            t("Run independent work together", "独立任务并行执行"),
             t(
-                "Let the agent use your project's tools. Read the command output to check what ran and whether it succeeded.",
-                "让智能体调用项目自己的工具，查看命令输出，确认执行了什么、结果是否通过。",
+                "Independent members work concurrently. Tasks with dependencies wait for predecessor reports. You choose the concurrency limit.",
+                "互不依赖的成员同时工作；有依赖的任务等待前置报告。并发上限由你设置。",
             ),
         ),
         (
-            t("Divide work among agents", "安排团队分工"),
+            t("Coordinate shared files", "协调共享文件"),
             t(
-                "Review a plan for implementation, tests and review. Choose member models, confirm the plan and follow their work.",
-                "检查实现、测试和审查的分工，为成员选择模型，确认方案后跟踪各自的任务。",
+                "File ownership and path locks coordinate writes. The scheduler reuses running assignments when the lead dispatches them again.",
+                "文件归属和路径锁协调写入。主 Agent 重复派发同一任务时，调度器复用已有执行。",
             ),
         ),
         (
-            t("Continue a conversation", "继续已有对话"),
+            t("Share dsh tools with the team", "让团队使用 dsh 工具"),
             t(
-                "Reopen saved messages, tool calls and member reports. Send a follow-up when the work needs another change.",
-                "重新打开保存的消息、工具调用和成员报告，需要调整时直接补充要求。",
+                "Enabled dsh plugins supply tools to the lead and members. Plugin settings and interface components live in the same workspace.",
+                "启用的 dsh 插件向主 Agent 和成员提供工具，插件设置与界面组件也放在同一个工作区。",
             ),
         ),
     ]
@@ -172,17 +174,17 @@ def landing(chinese: bool) -> str:
             ),
         ),
         (
-            t("Describe the task", "说明任务"),
+            t("Review the assignments", "审核成员分工"),
             t(
-                "Choose a model, mode and permissions. Say what should change and which checks should be run.",
-                "选择模型、模式和权限，说明修改目标，以及应该运行的检查。",
+                "Choose team mode, describe the job, and inspect the proposed members, files, dependencies and models.",
+                "选择协作模式，说明需求，检查方案中的成员、文件、依赖和模型。",
             ),
         ),
         (
-            t("Inspect the result", "检查结果"),
+            t("Confirm and follow the work", "确认并跟踪执行"),
             t(
-                "Read the reply, diff and test output. Continue in the same conversation if anything needs adjustment.",
-                "阅读回复、差异和测试输出，需要调整时在原对话中继续。",
+                "Confirm the plan in chat. Follow each member, then check the combined diff and test output.",
+                "在聊天中确认方案，跟踪每位成员的进展，再检查合并后的差异和测试输出。",
             ),
         ),
     ]
@@ -246,18 +248,25 @@ def landing(chinese: bool) -> str:
     )
     return f'''
 <section class="hero wrap"><div class="hero-copy"><span class="eyebrow">MICRO-MULTI</span>
-<h1>{t("Work on local projects<br>with AI agents.", "在本地项目中<br>使用 AI 智能体。")}</h1>
-<p class="lead">{t("Connect your model service, open a project and ask the agent to read code, edit files or run tests. Use a team for tasks with several roles, and inspect the work in one desktop app.", "连接模型服务，打开项目，让智能体阅读代码、修改文件或运行测试。需要不同职责时可以安排团队，并在同一个桌面应用中检查工作结果。")}</p>
+<h1>{t("One project.<br>A team of agents.", "一个项目，<br>多个 Agent 协作。")}</h1>
+<p class="lead">{t("The lead splits the job. You approve the assignments. Members work in parallel where they can, wait where they must, and return results for the lead to combine. Built for DeepSeek Harness plugins, with your choice of models.", "主 Agent 拆分任务，你确认分工，成员按文件归属和依赖执行。能并行的同时做，需要等待的按顺序来，最后汇总结果。兼容 DeepSeek Harness 插件，模型由你选择。")}</p>
 <div class="actions"><a class="button primary" href="#download">{t("Download", "下载")} ↓</a><a class="button secondary" href="{guide("README.md")}">{t("Get started", "开始使用")} →</a></div>
 <p class="platforms">Windows · Linux · {t("English and Chinese", "中英文界面")} · Apache-2.0</p></div>
 <div class="team-board" aria-label="{t("Example team assignment", "团队分工示例")}"><div class="board-top"><span class="dots">● ● ●</span><span>{t("Example task", "任务示例")}</span></div>
 <div class="task"><span class="label">{t("PROJECT TASK", "项目任务")}</span><p>{t("Add pagination to the order API and test boundary cases.", "为订单接口添加分页，并测试边界情况。")}</p></div>
 <div class="agent lead-agent"><span class="agent-icon">M</span><div><strong>{t("Lead agent", "主智能体")}</strong><small>{t("Prepare the plan and review the changes", "准备方案并审查改动")}</small></div><span class="status">{t("Review the plan", "审核方案")}</span></div>
 <div class="workers"><div class="agent"><span class="agent-icon blue">01</span><div><strong>{t("Implementation", "实现成员")}</strong><small>{t("Update the endpoint", "修改接口")}</small></div></div><div class="agent"><span class="agent-icon green">02</span><div><strong>{t("Testing", "测试成员")}</strong><small>{t("Cover boundary cases", "覆盖边界情况")}</small></div></div></div>
-<div class="board-bottom"><span>{t("Members start after you confirm", "确认方案后启动成员")}</span><span>Git · {t("Tool records", "工具记录")}</span></div></div></section>
-<section id="features" class="wrap section"><h2>{t("What you can do", "可以做什么")}</h2><p class="section-intro">{t("Use the lead agent for a focused change, or bring in members when the work can be divided. Files, command output and conversation history stay available for inspection.", "小范围修改可以只用主智能体，适合分工的任务可以交给团队。文件、命令输出和对话历史都能随时查看。")}</p><div class="features">{cards}</div><a class="text-link" href="{guide("PRODUCT_DEVELOPMENT_SPEC.md")}">{t("See example tasks", "查看任务示例")} →</a></section>
+<div class="board-bottom"><span>{t("Approve → Schedule → Combine", "确认 → 调度 → 汇总")}</span><span>dsh · {t("Shared tools", "共享工具")}</span></div></div></section>
+<section id="features" class="wrap section"><h2>{t("Collaboration needs a scheduler", "协作，需要程序来调度")}</h2><p class="section-intro">{t("A plan says who should do the work. The scheduler handles dependencies, file ownership and duplicate assignments. Each member's progress and tool output remain visible.", "方案说明谁做什么，调度器处理依赖、文件归属和重复派发。每位成员的进度与工具输出都可以查看。")}</p><div class="features">{cards}</div><a class="text-link" href="{guide("docs/AUTONOMOUS_COLLABORATION.md")}">{t("How team execution works", "了解团队执行流程")} →</a></section>
+<section id="extensions" class="compat wrap"><div><h2>{t("Keep your DeepSeek Harness plugins", "继续使用 DeepSeek Harness 插件")}</h2><p>{t("Native Cordis Host services, dsh tools, settings forms and client contributions run inside Micro-Multi. Enabled tools are available to the whole team. Skills and MCP services can be added alongside them. Compatibility follows each package's declared dependencies and required services.", "原生 Cordis Host 服务、dsh 工具、设置表单和客户端贡献在 Micro-Multi 中运行，启用的工具可供整个团队使用。Skills 与 MCP 服务也能接入。兼容范围取决于包声明的依赖和所需服务。")}</p><a class="text-link" href="{guide("docs/NATIVE_CORDIS.md")}">{t("Plugin compatibility and setup", "插件兼容范围与配置")} →</a></div><div class="plugin-pills"><span>Cordis Host</span><span>dsh tools</span><span>ClientModuleSystem</span><span>Skills · MCP</span></div></section>
+<section id="comparison" class="wrap section"><h2>{t("When a team helps", "什么时候值得用团队")}</h2><p class="section-intro">{t("A single agent is a good fit for a small edit. Larger jobs benefit from explicit responsibilities and coordinated execution. Here is the difference from a single loop or agents without a coordinator.", "单 Agent 适合小改动。任务越大，明确分工与协调执行越有用。下面对比单个执行循环，或没有协调器的成员分工。")}</p>
+<div class="comparison"><table><thead><tr><th>{t("Problem", "问题")}</th><th>{t("A single loop / uncoordinated agents", "单循环 / 无协调的分工")}</th><th>Micro-Multi</th></tr></thead><tbody>
+<tr><th>{t("Waiting", "等待时间")}</th><td>{t("Implementation, tests and docs run in sequence.", "实现、测试和文档依次处理。")}</td><td>{t("Independent tasks run together; dependent tasks wait.", "独立任务同时执行，依赖任务等待前置报告。")}</td></tr>
+<tr><th>{t("Shared files", "共享文件")}</th><td>{t("Concurrent edits need manual coordination.", "并发修改需要手动协调。")}</td><td>{t("Declared ownership and path locks coordinate writes.", "负责文件和路径锁协调写入。")}</td></tr>
+<tr><th>{t("Model choice", "模型选择")}</th><td>{t("One model often handles every role.", "常由同一模型处理所有职责。")}</td><td>{t("Choose individual member models in the plan.", "在方案中单独选择成员模型。")}</td></tr>
+<tr><th>{t("Retries", "任务重试")}</th><td>{t("An assignment may be dispatched again.", "可能再次派发同一任务。")}</td><td>{t("Reuse running or completed assignments.", "复用正在运行或已完成的任务。")}</td></tr>
+</tbody></table></div><p class="section-intro">{t("More agents can cost more. This is an execution comparison, not a speed or price benchmark. Use only the members the job needs.", "更多 Agent 也可能增加费用。这是执行方式的对比，不是速度或价格基准测试。只安排任务需要的成员。")}</p><a class="text-link" href="{guide("docs/AGENT_DESIGN.md")}">{t("Design choices and tradeoffs", "设计选择与取舍")} →</a></section>
 <section id="workflow" class="wrap section"><h2>{t("Start with a model and a project", "从模型和项目开始")}</h2><p class="section-intro">{t("You supply the model endpoint and credentials. The app handles the conversation and workspace; your project keeps its own build tools and dependencies.", "模型接口和凭据由你配置，应用负责对话与工作区；项目继续使用自己的构建工具和依赖。")}</p><div class="steps">{step_cards}</div><a class="text-link" href="{guide("docs/WORKSPACE.md")}">{t("Read the workspace guide", "阅读项目与对话指南")} →</a></section>
-<section id="extensions" class="compat wrap"><div><h2>{t("Add the instructions and tools you need", "添加需要的指令和工具")}</h2><p>{t("Use Skills for reusable instructions, MCP for service tools and dsh plugins for additional capabilities. Manage them in Customization and configure each connection or package before using it.", "Skills 保存可复用指令，MCP 接入服务工具，dsh 插件补充应用能力。在“自定义”中管理这些扩展，并在使用前完成连接或参数配置。")}</p><a class="text-link" href="{guide("docs/extensions.md")}">{t("Read the extension guide", "阅读扩展指南")} →</a></div><div class="plugin-pills"><span>Skills</span><span>MCP</span><span>dsh</span><span>{t("Local commands", "本地命令")}</span></div></section>
 <section id="technology" class="wrap section"><h2>{t("Technology", "技术栈")}</h2><p class="section-intro">{t("An Electron desktop shell runs a local Python backend. Node.js hosts the agent and plugin runtimes, while the interface shows their work and records.", "Electron 桌面外壳启动本地 Python 后端，Node.js 承载智能体和插件运行时，界面展示执行过程与记录。")}</p><div class="stack-grid">{stack_cards}</div><a class="text-link" href="{guide("docs/architecture.md")}">{t("Read the architecture guide", "阅读架构说明")} →</a></section>
 <section id="download" class="download section"><div class="wrap"><h2>{t("Install Micro-Multi", "安装 Micro-Multi")}</h2><p>{t("Choose a package for your system. Python and Node.js are included; install Git for repository work and any external tools your extensions require.", "选择对应系统的软件包。安装包包含 Python 和 Node.js，仓库工作需要另装 Git，扩展所需的外部工具也按需安装。")}</p><div class="downloads">{download_cards}</div><p class="download-note"><a href="{REPO}/releases/download/v0.1.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · <a href="{guide("docs/DESKTOP_RELEASE.md")}">{t("Installation and Linux requirements", "安装与 Linux 环境要求")}</a> · <a href="{guide("docs/deployment.md")}">{t("Run from source", "从源码运行")}</a></p></div></section>
 <section class="wrap community"><div><h2>{t("Help and contributions", "帮助与贡献")}</h2><p>{t("Check the troubleshooting guide when something fails. You can report bugs, discuss ideas or contribute code and documentation on GitHub.", "遇到问题时先查看常见问题，也可以在 GitHub 报告问题、讨论建议，或贡献代码与文档。")}</p></div><div class="actions"><a class="button primary" href="{guide("docs/TROUBLESHOOTING.md")}">{t("Troubleshooting", "常见问题")}</a><a class="button secondary" href="{REPO}">GitHub ↗</a></div></section>'''
@@ -316,10 +325,12 @@ def main() -> None:
     for chinese, destination in ((False, OUT / "index.html"), (True, OUT / "zh/index.html")):
         destination.write_text(
             page(
-                "本地项目的 AI 桌面应用" if chinese else "AI agents for local projects",
-                "连接模型，在本地项目中阅读代码、修改文件、运行测试，并使用智能体团队和扩展工具。"
+                "多 Agent 协作与 DeepSeek Harness 插件"
                 if chinese
-                else "Connect a model to read code, edit files and run tests in local projects, with agent teams and extension tools.",
+                else "Multi-agent collaboration and DeepSeek Harness plugins",
+                "主 Agent 拆分任务，成员按文件归属和依赖协作，汇总执行结果。兼容 DeepSeek Harness 原生插件，支持自选成员模型。"
+                if chinese
+                else "The lead splits tasks, members coordinate files and dependencies, and results come back to one workspace. Compatible with native DeepSeek Harness plugins, with per-member model choice.",
                 landing(chinese),
                 lang="zh-CN" if chinese else "en",
                 path="zh/" if chinese else "",

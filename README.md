@@ -1,26 +1,32 @@
 <div align="center">
   <img src="src/masp/web/micro-multi.svg" alt="Micro-Multi" width="88" />
   <h1>Micro-Multi</h1>
-  <p>A desktop app for working on local projects with AI agents.</p>
+  <p>Split work across agents in one project. Compatible with DeepSeek Harness plugins.</p>
   <p>English · <a href="README.zh-CN.md">简体中文</a></p>
   <p><a href="https://lkdenchin.github.io/Micro-Multi/">Website</a> · <a href="#installation">Install</a> · <a href="#your-first-task">Get started</a> · <a href="https://lkdenchin.github.io/Micro-Multi/docs/readme.html">Documentation</a></p>
 </div>
 
-Micro-Multi lets you work with AI agents in a local project folder. Connect a model service, open a project and describe the task. The agent can read code, edit files, run commands and use the tools you have enabled. The conversation, file browser, diffs and tool output are available in the same app.
+Micro-Multi is a local desktop workspace built around **multi-agent collaboration**. You describe the job; the lead agent splits it into assignments. After you approve the plan, members work within their file ownership and task dependencies, and the lead combines their results. Plans, member progress, tool output and code diffs share one workspace.
 
-For a small change, use the lead agent on its own. For work that needs several roles, choose team mode: the lead proposes a plan, you review the members and their assignments, and the team starts after you confirm it. You can follow each member's work and check the result against the project files.
+For an order API change, one member implements pagination, another writes boundary tests, and a third documents the parameters. Independent assignments can run together. A test task that needs the implementation waits for its report. The scheduler coordinates concurrent writes to the same file.
 
-The app supports Windows and Linux, with English and Simplified Chinese interfaces. You supply the model endpoint and credentials. Skills, MCP servers and plugins from the deepseek-harness (dsh) ecosystem can add instructions and tools.
+**DeepSeek Harness (dsh) plugin compatibility** is the other core part of the project. Native Cordis Host and the dsh client module system load declared services, tools, settings forms and interface contributions. Enabled tools are available to team members as well as the lead. Skills and MCP services also work alongside these plugins.
 
-## What you can use it for
+Windows / Linux · English and Chinese · Your choice of model service · Apache-2.0
 
-| Task | How Micro-Multi helps |
+## Why coordinate agents?
+
+A single agent works well for short jobs. When implementation, tests and review share one execution loop, they usually happen in sequence and share one context. A prompt that says “divide the work” does not enforce who can edit which files, which task must wait, or whether an assignment has already started. That needs a scheduler.
+
+| A single agent, or agents without a coordinator | What Micro-Multi does |
 | --- | --- |
-| Understand a codebase | Ask the agent to trace an entry point, explain a module or find the files involved in a feature. |
-| Make and test a change | Work in your project folder, inspect the diff and read the output of commands and tests. |
-| Split up a larger task | Assign implementation, testing or review to different team members and choose their models. |
-| Use external tools | Connect an MCP server, install a dsh plugin or provide a Skill for a recurring task. |
-| Continue existing work | Reopen a saved conversation with its messages, tool records and member reports. |
+| Implementation, tests and docs run in sequence | Runs independent tasks concurrently; dependencies wait for predecessor reports. Concurrency is bounded. |
+| Several members edit the same file | Uses declared file ownership, path locks and dependencies to coordinate writes. |
+| Every role uses the same model | Members inherit the lead model; you can change individual models in the plan. |
+| Retries dispatch the same assignment again | Reuses running or completed assignments; an approved revision starts once. |
+| Plugins are only wired to the lead | Enabled dsh, MCP and command tools are available to the lead and members. |
+
+This compares execution models, not benchmark results. Parallel work can reduce waiting for independent tasks, but extra members can increase model calls and cost. Use the lead alone for a small edit; use a team when the responsibilities are clear.
 
 ## Installation
 
@@ -41,21 +47,25 @@ The packages include Python and Node.js. Install Git for repository work. Docker
 
 1. Open **Settings → Models → Add or edit model**. Enter a name, API base URL, model ID and API key, then test the connection.
 2. Add a local project folder. Keep **Link this directory** selected to work in the original folder. A folder without Git is initialized as a repository.
-3. Start a conversation in that project. Select the model, **Lead agent only**, and the permissions you want to allow.
+3. Start a conversation in that project. Select the model, **Multi-agent collaboration**, and the permissions you want to allow.
 4. Describe the change and how to check it. For example:
 
    ```text
-   Find the endpoint that lists orders. Add pagination, keeping the existing
-   response fields. Run the relevant tests and explain any failures.
+   Add pagination to the order API, keeping the existing response fields.
+   Assign implementation, boundary tests and parameter docs to separate members.
+   List their files and dependencies. The lead combines changes and runs tests.
    ```
 
-5. Read the reply, open the changed files and inspect the diff. Command output is recorded with the tool calls. Send a follow-up message if the result needs adjustment.
+5. Review the plan in the chat. Adjust members, models or files, then confirm execution.
+6. Follow member progress and inspect the diff and test output. Send a follow-up in the same conversation if the result needs adjustment.
 
 You can attach files to a conversation and open the right-hand inspector to browse files, reviews, previews and terminal activity. See [projects and conversations](docs/WORKSPACE.md) for the main controls and [model setup](docs/MODELS.md) for connection details.
 
 ## Working with a team
 
-Choose multi-agent collaboration in the composer when the task has separate responsibilities. The lead prepares a plan with member roles, tasks, file ownership and models. Use **Adjust team** to change it, then **Confirm execution** to start that plan. Each new task or round of feedback needs its own confirmation.
+The lead prepares a plan with member roles, tasks, file ownership, dependencies and models. Use **Adjust team** to change it, then **Confirm execution** to start that revision. Member tasks do not run before approval. Each new task or round of feedback needs its own confirmation.
+
+Confirmation checks the saved server revision. If a plan has changed, the chat card shows the updated assignments for review and confirmation in place. You do not need to open the collaboration map.
 
 Members follow the lead model unless you select another model for them. The team view shows their status and reports; tool records show what they actually ran. You can add instructions while they work, pause the conversation or stop it. Before accepting the result, inspect the changes and the test output. The [collaboration guide](docs/AUTONOMOUS_COLLABORATION.md) walks through this process.
 
@@ -67,10 +77,12 @@ Open **Customization** to manage extensions.
 | --- | --- |
 | Skills | Reusable instructions in a `SKILL.md` file. Project Skills live in `.agents/skills/`. |
 | MCP servers | Tools provided by a configured local or remote server. |
-| dsh plugins | Tools, model providers and interface components from the deepseek-harness ecosystem. |
+| dsh plugins | Native Cordis services and tools, model providers, settings forms and conversation interface components. |
 | Command plugins | Tools implemented by a local command. |
 
 Open an installed plugin's details to configure it. A plugin may need its own account, API key or external program before its tools can be used. The composer **+** menu lists enabled capabilities. Read the [extension guide](docs/extensions.md) to choose an extension type, or the [dsh guide](docs/NATIVE_CORDIS.md) to install or develop a plugin.
+
+Compatibility depends on a package's declared entries, dependencies and required services; it does not mean every third-party package has been tested. Startup restores the chat before loading optional plugin clients. Probing a plugin without a client does not boot its Host. Native services keep dsh's dependency and lifecycle rules.
 
 ## Permissions and data
 

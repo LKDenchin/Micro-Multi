@@ -658,10 +658,12 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         return bundle_configuration(service().store, service().home, plugin_id)
 
     @app.get("/api/dsh/plugins/{plugin_id}/surface")
-    def extension_surface(plugin_id: str) -> dict[str, Any]:
+    def extension_surface(plugin_id: str, conversation_only: bool = False) -> dict[str, Any]:
         from masp.plugin_surface import surface_info
 
-        return surface_info(service().store, plugin_id, service().home)
+        return surface_info(
+            service().store, plugin_id, service().home, conversation_only=conversation_only
+        )
 
     @app.get("/api/dsh/plugins/{plugin_id}/surface/{asset}")
     def extension_surface_asset(plugin_id: str, asset: str) -> FileResponse:
@@ -1149,6 +1151,10 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
             and body["version"] != team.get("version")
         ):
             raise HTTPException(409, "协作方案已更新，请审核最新版本")
+        if team.get("approval_consumed"):
+            raise HTTPException(409, "此协作方案已执行，请为新任务提交新版方案")
+        if team.get("status") == "approved":
+            return team
         load_config(store, service().home, team["main_profile_id"])
         if team.get("review_mode") == "open-code-review":
             load_config(
@@ -2161,6 +2167,14 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
         )
         if body.agent_id and body.agent_id not in {"main", "main_only"}:
             raise HTTPException(422, "仅支持多 Agent 协作和单主 Agent 模式；子代理由主 Agent 调度")
+        if body.execute_team_now and (
+            main_only
+            or not conv_team
+            or conv_team.get("status") != "approved"
+            or body.team_version != conv_team.get("version")
+            or conv_team.get("approval_consumed")
+        ):
+            raise HTTPException(409, "此协作方案未批准、已更新或已执行，请刷新当前方案")
         try:
             config = load_config(
                 service().store,
@@ -2460,9 +2474,10 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     f"{a['name']}({a['id']}): 负责 {a.get('responsibility', '')}"
                     for a in conv_team["agents"]
                 )
-                team_context_note = (
-                    f"当前对话已确认的子 Agent 团队：{roster}。"
-                    "旧团队仅供分工参考，不能继承上一轮批准；本轮重新审核后才能执行。"
+                team_context_note = f"当前对话已确认的子 Agent 团队：{roster}。" + (
+                    "本轮方案已批准，成员由调度器启动；收取报告并完成集成，不要重新提交同一方案。"
+                    if body.execute_team_now
+                    else "旧团队仅供分工参考，不能继承上一轮批准；本轮重新审核后才能执行。"
                 )
 
             solo_or_sub_extra_context = ""
@@ -2471,15 +2486,19 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
 
             if main_only:
                 role_intro = (
-                    "你是 Micro-Multi 全能主 Agent，当前处于【仅主 Agent 独立全栈执行模式 (Solo Full-Stack Execution Mode)】。\n"
-                    "重要原则：在「仅主 Agent」模式下，你不拆分或移交子 Agent 团队，也不只承担审查职责，而是作为独立的全能执行智能体，"
-                    "独自承担需求分析、架构设计、代码/前端动画/SVG/文书编写、文件新增与删减、终端命令执行、MCP 电脑软件操控与结果验证的全部工作！"
+                    "你是 Micro-Multi 的主 Agent，当前仅主 Agent 模式。"
+                    "独立完成需求分析、实现、工具调用和验证，不创建或移交子 Agent。\n"
                 )
             else:
+                approval_instruction = (
+                    "本轮方案已批准，成员已由调度器启动；不要重新规划或启动同一批任务。\n"
+                    if body.execute_team_now
+                    else "需要方案审核时，先提交完整分工，批准前不得启动子 Agent。\n"
+                )
                 role_intro = (
-                    "你是 Micro-Multi 项目的多 Agent 协作总控 Supervisor（主管架构师与协作调度总控），参考开源顶级框架 deer-flow 与 langgraph-supervisor 构建。\n"
-                    "【多 Agent 协作核心准则】：\n"
-                    "1. 按任务依赖分工：有两个或更多独立工作时，优先一次调用 start_subagents 创建并启动多个专职子代理；不必逐个 create_subagent。启动立即返回，你同时完成独立的实现或集成工作，使用 wait_subagents 获取先完成的报告。有依赖的任务等待前置报告后启动。每轮先拆分完整任务并提交用户审核，审核前严禁启动子代理。\n"
+                    "你是 Micro-Multi 的主 Agent，负责多 Agent 规划、调度、集成和验证。\n"
+                    + approval_instruction
+                    + "1. 按任务依赖分工：有两个或更多独立工作时，优先一次调用 start_subagents；你同时完成独立工作，使用 wait_subagents 收取报告。有依赖的任务声明 depends_on。\n"
                     "子代理是真实执行实体，必须用调度工具启动，禁止称之为模拟或用口头描述代替调度。不要把长篇规划当成已完成交付。\n"
                     "2. 明确并发职责与文件归属：避免同时修改同一文件；共享接口先约定，再分工。子代理拥有工具权限，仍须遵守授权与工作区边界。\n"
                     "3. 风险驱动验收：普通改动采用必要的自动检查与一次集成验收，已有有效测试证据不重复测试或追加审查子代理。涉及权限、持久化、并发或关键接口时增加针对性独立审查；发现问题自主修复。后台子代理全部结束并收取报告前，不得宣称任务完成。\n"
@@ -2818,8 +2837,14 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                     supervisor.team_obj["version"] = (
                         int(supervisor.team_obj.get("version") or 0) + 1
                     )
+                    supervisor.team_obj["plan_version"] = supervisor.team_obj["version"]
                     supervisor.team_obj.update(
-                        status="draft", workflow_state="planned", requirement=body.content
+                        status="draft",
+                        workflow_state="planned",
+                        requirement=body.content,
+                        approval_consumed=False,
+                        pending_tasks=[],
+                        plan_documents=[],
                     )
                 else:
                     supervisor.team_obj["approval_consumed"] = True
@@ -2917,7 +2942,7 @@ def create_app(home: Path | None = None, *, data_dir: Path | None = None) -> Fas
                             {
                                 "role": "system",
                                 "content": (
-                                    "用户已批准本轮团队方案。按以下已审核负责人、职责、模型、文件归属执行，不得启动未审核的额外任务："
+                                    "用户已批准本轮团队方案，以下任务已由调度器启动。不要重新提交方案或重复启动；用 wait_subagents 收集报告，完成你负责的集成和验证。按以下已审核负责人、职责、模型、文件归属执行，不得启动未审核的额外任务："
                                     if body.execute_team_now
                                     else "已启动真实协作成员。主代理继续执行原始任务，可按实际需要分配额外独立任务，并合并成员结果："
                                 )
