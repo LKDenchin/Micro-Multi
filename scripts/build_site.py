@@ -103,12 +103,13 @@ def page(
     docs = doc_url("README.zh-CN.md" if chinese else "README.md")
     alternate = alternate or (BASE if chinese else BASE + "zh/")
     home = BASE + "zh/" if chinese else BASE
+    display_title = title if title.startswith("Micro-Multi") else title + " · Micro-Multi"
     return f'''<!doctype html>
 <html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{html.escape(title)} · Micro-Multi</title><meta name="description" content="{html.escape(description, quote=True)}">
+<title>{html.escape(display_title)}</title><meta name="description" content="{html.escape(description, quote=True)}">
 <meta name="theme-color" content="#172033"><link rel="canonical" href="{SITE}{path}">
 <link rel="alternate" hreflang="{"en" if chinese else "zh-CN"}" href="https://lkdenchin.github.io{alternate}">
-<meta property="og:title" content="{html.escape(title, quote=True)} · Micro-Multi"><meta property="og:description" content="{html.escape(description, quote=True)}">
+<meta property="og:title" content="{html.escape(display_title, quote=True)}"><meta property="og:description" content="{html.escape(description, quote=True)}">
 <meta property="og:type" content="website"><meta property="og:image" content="{SITE}assets/micro-multi.png">
 <link rel="icon" href="{BASE}assets/micro-multi.svg"><link rel="stylesheet" href="{BASE}assets/site.css">
 <script src="{BASE}assets/site.js" defer></script></head><body>
@@ -284,7 +285,7 @@ def landing(chinese: bool, release_links: dict[str, str] | None = None) -> str:
     )
     return f'''
 <section class="hero wrap"><div class="hero-copy"><span class="eyebrow">MICRO-MULTI</span>
-<h1>{t("One project.<br>A team of agents.", "一个项目，<br>多个 Agent 协作。")}</h1>
+<h1>{t("Micro-Multi:<br>A next-generation<br>multi-agent workbench", "Micro-Multi：<br>新一代多Agent工作台")}</h1>
 <p class="lead">{t("The lead splits the job. You approve the assignments and choose each member's model. Compatible with DeepSeek Harness plugins.", "主 Agent 拆分任务，你确认分工，为每位成员选择模型。兼容 DeepSeek Harness 插件。")}</p>
 <div class="actions"><a class="button primary" href="#download">{t("Download", "下载")} ↓</a><a class="button secondary" href="{guide("README.md")}">{t("Get started", "开始使用")} →</a></div>
 <p class="platforms">Windows · Linux · {t("English and Chinese", "中英文界面")} · Apache-2.0</p></div>
@@ -371,9 +372,9 @@ def main() -> None:
     for chinese, destination in ((False, OUT / "index.html"), (True, OUT / "zh/index.html")):
         destination.write_text(
             page(
-                "多 Agent 协作与 DeepSeek Harness 插件"
+                "Micro-Multi：新一代多Agent工作台"
                 if chinese
-                else "Multi-agent collaboration and DeepSeek Harness plugins",
+                else "Micro-Multi: A Next-Generation Multi-Agent Workbench",
                 "主 Agent 拆分任务，成员按文件归属和依赖协作，汇总执行结果。兼容 DeepSeek Harness 原生插件，支持自选成员模型。"
                 if chinese
                 else "The lead splits tasks, members coordinate files and dependencies, and results come back to one workspace. Compatible with native DeepSeek Harness plugins, with per-member model choice.",
