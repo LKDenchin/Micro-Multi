@@ -1,4 +1,36 @@
 'use strict';
+// Keep the page readable without JavaScript or motion support.
+const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+if (!motionPreference.matches && 'IntersectionObserver' in window) {
+  const reveal = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add('is-visible');
+      reveal.unobserve(entry.target);
+    }
+  }, {threshold: 0, rootMargin: '0px 0px -40px 0px'});
+  for (const element of document.querySelectorAll('.hero-copy, main > .section, .compat, .community')) {
+    element.classList.add('reveal-ready');
+    reveal.observe(element);
+  }
+  motionPreference.addEventListener('change', event => {
+    if (!event.matches) return;
+    reveal.disconnect();
+    document.querySelectorAll('.reveal-ready').forEach(element => element.classList.add('is-visible'));
+  });
+}
+let scrollFrame = null;
+function updateScrollState() {
+  const range = document.documentElement.scrollHeight - window.innerHeight;
+  document.documentElement.style.setProperty('--page-progress', range > 0 ? Math.min(1, window.scrollY / range) : 0);
+  document.querySelector('.header')?.classList.toggle('is-scrolled', window.scrollY > 24);
+  scrollFrame = null;
+}
+window.addEventListener('scroll', () => {
+  scrollFrame ??= window.requestAnimationFrame(updateScrollState);
+}, {passive: true});
+window.addEventListener('resize', updateScrollState);
+updateScrollState();
 for (const link of document.querySelectorAll('.sidebar nav a')) {
   if (new URL(link.href).pathname === window.location.pathname) {
     link.classList.add('active');
