@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import argparse
+import fnmatch
 import html
 import json
 import re
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from markdown_it import MarkdownIt
+if TYPE_CHECKING:
+    from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build" / "site"
@@ -117,7 +121,33 @@ def page(
 <div><a href="{doc_url(localized_source("CONTRIBUTING.md", chinese))}">{"参与贡献" if chinese else "Contribute"}</a><a href="{doc_url(localized_source("SECURITY.md", chinese))}">{"安全" if chinese else "Security"}</a><a href="{REPO}/discussions">{"社区" if chinese else "Community"}</a><a href="{REPO}/blob/main/LICENSE">Apache-2.0</a></div><small>© 2026 LKDenchin · {"Micro-Multi 贡献者" if chinese else "Micro-Multi contributors"}</small></footer></body></html>'''
 
 
-def landing(chinese: bool) -> str:
+def release_downloads(release: dict) -> dict[str, str]:
+    if release.get("draft") or release.get("prerelease"):
+        raise ValueError("Downloads must use a published stable release")
+    patterns = {
+        "windows": "Micro-Multi-Setup-*-x64.exe",
+        "debian": "Micro-Multi-*-amd64.deb",
+        "appimage": "Micro-Multi-*-x86_64.AppImage",
+        "checksums": "SHA256SUMS*",
+    }
+    links = {}
+    for key, pattern in patterns.items():
+        matches = [
+            asset
+            for asset in release.get("assets", [])
+            if asset.get("state") == "uploaded" and fnmatch.fnmatchcase(asset["name"], pattern)
+        ]
+        if len(matches) > 1:
+            raise ValueError(f"Ambiguous release asset: {key}")
+        if matches:
+            url = matches[0]["browser_download_url"]
+            if not url.startswith(REPO + "/releases/download/"):
+                raise ValueError(f"Unexpected release asset URL: {key}")
+            links[key] = url
+    return links
+
+
+def landing(chinese: bool, release_links: dict[str, str] | None = None) -> str:
     def t(en: str, zh: str) -> str:
         return zh if chinese else en
 
@@ -238,13 +268,19 @@ def landing(chinese: bool) -> str:
         for label, technology, copy in stack
     )
     downloads = [
-        ("Windows", "x64 · NSIS", "Micro-Multi-Setup-0.1.0-x64.exe"),
-        ("Debian / Ubuntu", "x64 · .deb", "Micro-Multi-0.1.0-amd64.deb"),
-        ("Linux", "x64 · AppImage", "Micro-Multi-0.1.0-x86_64.AppImage"),
+        ("Windows", "x64 · NSIS", "windows"),
+        ("Debian / Ubuntu", "x64 · .deb", "debian"),
+        ("Linux", "x64 · AppImage", "appimage"),
     ]
+    release_links = release_links or {}
+    latest_url = REPO + "/releases/latest"
+    checksum_url = html.escape(release_links.get("checksums", latest_url), quote=True)
+    checksum_label = (
+        "SHA256SUMS" if "checksums" in release_links else t("Release files", "Release 文件")
+    )
     download_cards = "".join(
-        f'<a class="download-card" href="{REPO}/releases/download/v0.1.0/{asset}"><span>{system}</span><small>{kind}</small><b>{t("Download", "下载")} ↗</b></a>'
-        for system, kind, asset in downloads
+        f'<a class="download-card" href="{html.escape(release_links.get(key, latest_url), quote=True)}"><span>{system}</span><small>{kind}</small><b>{t("Download", "下载") if key in release_links else t("View release", "查看 Release")} ↗</b></a>'
+        for system, kind, key in downloads
     )
     return f'''
 <section class="hero wrap"><div class="hero-copy"><span class="eyebrow">MICRO-MULTI</span>
@@ -268,7 +304,7 @@ def landing(chinese: bool) -> str:
 </tbody></table></div><p class="section-intro">{t("More agents can cost more. This is an execution comparison, not a speed or price benchmark. Use only the members the job needs.", "更多 Agent 也可能增加费用。这是执行方式的对比，不是速度或价格基准测试。只安排任务需要的成员。")}</p><a class="text-link" href="{guide("docs/AGENT_DESIGN.md")}">{t("Design choices and tradeoffs", "设计选择与取舍")} →</a></section>
 <section id="workflow" class="wrap section"><h2>{t("Start with a model and a project", "从模型和项目开始")}</h2><p class="section-intro">{t("You supply the model endpoint and credentials. The app handles the conversation and workspace; your project keeps its own build tools and dependencies.", "模型接口和凭据由你配置，应用负责对话与工作区；项目继续使用自己的构建工具和依赖。")}</p><div class="steps">{step_cards}</div><a class="text-link" href="{guide("docs/WORKSPACE.md")}">{t("Read the workspace guide", "阅读项目与对话指南")} →</a></section>
 <section id="technology" class="wrap section"><h2>{t("Technology", "技术栈")}</h2><p class="section-intro">{t("An Electron desktop shell runs a local Python backend. Node.js hosts the agent and plugin runtimes, while the interface shows their work and records.", "Electron 桌面外壳启动本地 Python 后端，Node.js 承载智能体和插件运行时，界面展示执行过程与记录。")}</p><div class="stack-grid">{stack_cards}</div><a class="text-link" href="{guide("docs/architecture.md")}">{t("Read the architecture guide", "阅读架构说明")} →</a></section>
-<section id="download" class="download section"><div class="wrap"><h2>{t("Install Micro-Multi", "安装 Micro-Multi")}</h2><p>{t("Choose a package for your system. Python and Node.js are included; install Git for repository work and any external tools your extensions require.", "选择对应系统的软件包。安装包包含 Python 和 Node.js，仓库工作需要另装 Git，扩展所需的外部工具也按需安装。")}</p><div class="downloads">{download_cards}</div><p class="download-note"><a href="{REPO}/releases/download/v0.1.0/SHA256SUMS.txt">SHA256SUMS.txt</a> · <a href="{guide("docs/DESKTOP_RELEASE.md")}">{t("Installation and Linux requirements", "安装与 Linux 环境要求")}</a> · <a href="{guide("docs/deployment.md")}">{t("Run from source", "从源码运行")}</a></p></div></section>
+<section id="download" class="download section"><div class="wrap"><h2>{t("Install Micro-Multi", "安装 Micro-Multi")}</h2><p>{t("Choose a package for your system. Python and Node.js are included; install Git for repository work and any external tools your extensions require.", "选择对应系统的软件包。安装包包含 Python 和 Node.js，仓库工作需要另装 Git，扩展所需的外部工具也按需安装。")}</p><div class="downloads">{download_cards}</div><p class="download-note"><a href="{checksum_url}">{checksum_label}</a> · <a href="{guide("docs/DESKTOP_RELEASE.md")}">{t("Installation and Linux requirements", "安装与 Linux 环境要求")}</a> · <a href="{guide("docs/deployment.md")}">{t("Run from source", "从源码运行")}</a></p></div></section>
 <section class="wrap community"><div><h2>{t("Help and contributions", "帮助与贡献")}</h2><p>{t("Check the troubleshooting guide when something fails. You can report bugs, discuss ideas or contribute code and documentation on GitHub.", "遇到问题时先查看常见问题，也可以在 GitHub 报告问题、讨论建议，或贡献代码与文档。")}</p></div><div class="actions"><a class="button primary" href="{guide("docs/TROUBLESHOOTING.md")}">{t("Troubleshooting", "常见问题")}</a><a class="button secondary" href="{REPO}">GitHub ↗</a></div></section>'''
 
 
@@ -307,6 +343,16 @@ def render_guide(source: str, renderer: MarkdownIt) -> str:
 
 
 def main() -> None:
+    from markdown_it import MarkdownIt
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--release-json", type=Path, help="Latest GitHub Release metadata")
+    args = parser.parse_args()
+    release_links = (
+        release_downloads(json.loads(args.release_json.read_text("utf-8")))
+        if args.release_json
+        else None
+    )
     if OUT.resolve() != ROOT / "build" / "site":
         raise ValueError("Site output must remain in the generated workspace directory")
     if OUT.exists():
@@ -331,7 +377,7 @@ def main() -> None:
                 "主 Agent 拆分任务，成员按文件归属和依赖协作，汇总执行结果。兼容 DeepSeek Harness 原生插件，支持自选成员模型。"
                 if chinese
                 else "The lead splits tasks, members coordinate files and dependencies, and results come back to one workspace. Compatible with native DeepSeek Harness plugins, with per-member model choice.",
-                landing(chinese),
+                landing(chinese, release_links),
                 lang="zh-CN" if chinese else "en",
                 path="zh/" if chinese else "",
             ),

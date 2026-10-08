@@ -23,7 +23,12 @@ jobs:
           python-version: '3.14'
       - uses: actions/configure-pages@v5
       - run: python -m pip install -r requirements-site.txt
-      - run: python scripts/build_site.py
+      - name: Read latest published Release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh api "repos/$GH_REPO/releases/latest" > "$RUNNER_TEMP/latest-release.json"
+      - run: python scripts/build_site.py --release-json "$RUNNER_TEMP/latest-release.json"
       - run: python scripts/verify_site.py
       - uses: actions/upload-pages-artifact@v4
         with:
