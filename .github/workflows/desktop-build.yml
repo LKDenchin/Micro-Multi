@@ -3,9 +3,13 @@ on:
   workflow_dispatch:
     inputs:
       upload_draft:
-        description: Upload verified Linux installers to the existing v0.1.0 draft
+        description: Upload verified Windows and Linux installers to a Release draft
         type: boolean
         default: false
+      draft_tag:
+        description: Draft tag (leave blank for desktop-<run ID>)
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -32,8 +36,6 @@ jobs:
             dist/desktop/SHA256SUMS.txt
           if-no-files-found: error
   linux:
-    permissions:
-      contents: write
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -72,9 +74,28 @@ jobs:
             dist/desktop/Micro-Multi-*.AppImage
             dist/desktop/SHA256SUMS.txt
           if-no-files-found: error
-      - name: Upload verified Linux release assets
-        if: inputs.upload_draft
+  upload-draft:
+    name: Upload installers to Release draft
+    needs: [build, linux]
+    if: inputs.upload_draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: desktop-draft-${{ inputs.draft_tag || github.run_id }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Micro-Multi-*-x64
+          path: build/desktop-artifacts
+      - name: Upload verified installers and combined checksums
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: python scripts/upload_linux_release.py
+          RELEASE_TAG: ${{ inputs.draft_tag }}
+        run: python scripts/upload_desktop_release.py

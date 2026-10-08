@@ -98,4 +98,8 @@ Windows Python 来自 python.org 嵌入版。Linux 使用 `20261001` 发布的�
 
 冒烟脚本用空临时数据启动实际安装包，不继承模型配置；检查包内 Node 依赖及 peer 闭包、后端健康、内置 MCP、空列表、真实渲染与桥、凭据读写删除、审查程序和原生 dsh。AppImage 检查实际解压资源。临时本机 DevTools 端口与后台渲染开关仅用于检查，结束后清理测试进程及数据。见[验证记录](RELEASE_VALIDATION.zh-CN.md)。
 
-提交前执行 `python scripts/publication_audit.py`。安装包和 `SHA256SUMS.txt` 属于 Release 附件，不纳入源码。手动桌面工作流可构建 Windows/Linux 而不发布。
+提交前执行 `python scripts/publication_audit.py`。安装包和 `SHA256SUMS.txt` 属于 Release 附件，不纳入源码。
+
+在 GitHub Actions 手动运行 **Desktop package build**，构建并检查 Windows 和 Linux 安装包。不勾选 `upload_draft` 时，从工作流的 Artifacts 下载；勾选后，等两端构建与检查均成功，再将三个安装包和一份合并的 `SHA256SUMS.txt` 上传到 Release 草稿。
+
+`draft_tag` 留空时自动使用 `desktop-<运行 ID>`，也可以填写新草稿或已有草稿的标签。复用草稿会替换同名附件；已发布的 Release 不允许覆盖，已有 Git 标签必须指向本次构建的提交。上传后核对文件大小与 SHA-256，草稿链接会显示在运行摘要中。工作流不会正式发布，检查安装包和说明后，可在 GitHub Releases 手动发布。

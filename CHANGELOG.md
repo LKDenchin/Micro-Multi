@@ -2,6 +2,8 @@
 
 ## Unreleased — source update 2026-10-08
 
+- Simplify both landing pages, add scroll reveals and team diagram motion, and respect reduced-motion preferences.
+- Add optional draft Release upload for verified Windows/Linux desktop builds, with combined checksums and remote digest verification.
 - Restore chat before plugin discovery; load up to three clients concurrently, lock builds per cache revision and reuse native source digests.
 - Skip Host initialization for conversation probes of packages without clients; retain model and settings discovery in details.
 - Wait for plan persistence and check the server revision before confirmation. Update stale cards in place, coalesce confirmations and reject consumed approvals.

@@ -99,4 +99,8 @@ Installed data defaults to `%APPDATA%\Micro-Multi\data` on Windows and `${XDG_CO
 
 The smoke script starts the actual packaged executable with empty temporary data and no inherited model settings. It checks the required Node dependency and peer closure inside the package, backend health, built-in MCP, empty lists, the real renderer and desktop bridge, credential read/write/delete, review binary and native dsh Cordis. AppImage checks locate the running single file's actual extracted resources. A temporary loopback DevTools port and background-rendering test switches are enabled for this check only; test processes and data are cleaned afterward. See [release validation](RELEASE_VALIDATION.md).
 
-Run `python scripts/publication_audit.py` before committing. Publish installation packages and `SHA256SUMS.txt` as Release assets, not source files. The manual desktop workflow builds Windows and Linux packages without publishing.
+Run `python scripts/publication_audit.py` before committing. Installation packages and `SHA256SUMS.txt` belong in Release assets, not source files.
+
+In GitHub Actions, run **Desktop package build** to build and smoke-test Windows and Linux installers. Keep `upload_draft` unchecked to download the packages from the workflow artifacts. Check it to upload all three installers and one combined `SHA256SUMS.txt` to a Release draft after both builds pass.
+
+Leave `draft_tag` blank to create `desktop-<run ID>`, or enter a tag for a new or existing draft. Reusing a draft replaces assets with the same names. Published releases are rejected; an existing Git tag must point to the build's commit. The workflow verifies uploaded file sizes and SHA-256 digests and adds the draft link to its summary. It does not publish the draft. Review the packages and release notes, then publish from GitHub Releases when ready.
